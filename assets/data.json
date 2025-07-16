@@ -53,6 +53,33 @@
       "L": 132,
       "Zu": 85.17,
       "inrun_friction_coefficient": 0.02
+    },
+    {
+      "name": "Vikersund",
+      "e1": 128.9,
+      "e2": 94,
+      "gates": 42,
+      "t": 8,
+      "gamma_deg": 36,
+      "alpha_deg": 11,
+      "r1": 100,
+      "h": 102.24,
+      "n": 170.47,
+      "s": 2.64,
+      "l1": 35,
+      "l2": 25,
+      "a_finish": 116.5,
+      "betaP_deg": 38,
+      "beta_deg": 34,
+      "betaL_deg": 24,
+      "rl": 454,
+      "r2l": 100,
+      "r2": 109,
+      "P": 165,
+      "K": 200,
+      "L": 240,
+      "Zu": 135,
+      "inrun_friction_coefficient": 0.02
     }
   ],
   "jumpers": [
@@ -61,12 +88,14 @@
       "last_name": "Stoch",
       "mass": 60,
       "height": 1.72,
-      "jump_force": 1400
+      "jump_force": 1000
     },
     {
       "name": "Stanisław",
       "last_name": "Marusarz",
-      "mass": 70
+      "mass": 65,
+      "jump_force": 1600,
+      "flight_lift_coefficient": 0.9
     }
   ]
 }

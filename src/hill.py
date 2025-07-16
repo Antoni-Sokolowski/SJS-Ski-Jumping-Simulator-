@@ -85,7 +85,7 @@ class Hill:
         self.landing_segment_boundaries = {'polynomial1': (0, self.K), 'parabola2': (self.K, self.L)}
 
         # Dodatkowe punkt dla pierwszej krzywej
-        self.x_F = 0.11 * self.L
+        self.x_F = 0.05 * self.L
         self.y_F = -self.s - 1
 
         # Oblicz współczynniki parabol

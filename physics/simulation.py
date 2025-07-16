@@ -2,6 +2,8 @@
 
 '''Logika symulacji'''
 
+import json
+from pathlib import Path
 from utils.constants import GRAVITY, AIR_DENSITY
 import math
 import numpy as np
@@ -11,37 +13,35 @@ from hill import Hill
 from jumper import Jumper
 from utils.helpers import gravity_force_parallel, friction_force, drag_force
 
-Zakopane = Hill("Wielka Krokiew",
-                97.8,
-                77,
-                34,
-                6.5,
-                35,
-                11,
-                90,
-                62.37,
-                107.76,
-                3.13,
-                16,
-                15,
-                103,
-                37,
-                34.3,
-                31.3,
-                310,
-                168,
-                99.3,
-                109,
-                125,
-                140,
-                89.11
-                )
 
-Kamil = Jumper("Kamil",
-               "Stoch",
-               60,
-               1.72,
-               )
+def load_data_from_json(filename='data.json'):
+    """
+    Wczytuje dane z pliku JSON z głównego folderu projektu.
+    """
+    # 1. Znajdź ścieżkę do folderu, w którym jest plik .py (czyli .../physics)
+    script_dir = Path(__file__).parent
+
+    # 2. Wyjdź o jeden poziom wyżej do głównego folderu projektu (.../SJS_Simulator)
+    project_dir = script_dir.parent
+
+    # 3. Połącz ścieżkę do głównego folderu z nazwą pliku
+    filepath = project_dir / filename
+
+    print(f"Szukam pliku pod ścieżką: {filepath}")
+
+    with open(filepath, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    # ... reszta kodu do tworzenia obiektów ...
+    hills = [Hill(**h) for h in data['hills']]
+    jumpers = [Jumper(**j) for j in data['jumpers']]
+
+    return hills, jumpers
+
+all_hills, all_jumpers = load_data_from_json()
+
+Zakopane = next((h for h in all_hills if h.name == "Zakopane"), None)
+Kamil = next((j for j in all_jumpers if j.name == "Kamil" and j.last_name == "Stoch"), None)
 
 
 def inrun_simulation(Hill, Jumper, gate_number=None, time_contact=0.1):
@@ -187,11 +187,11 @@ def plot_flight_trajectory(Hill, Jumper, gate_number=None, time_contact=0.1):
 
 
 
-speed = inrun_simulation(Zakopane, Kamil,1)
+speed = inrun_simulation(Zakopane, Kamil,11)
 print(f"{round(speed*3.6, 2)} km/h")
 
 
 
-fly_simulation(Zakopane, Kamil, 1)
+fly_simulation(Zakopane, Kamil, 11)
 
-plot_flight_trajectory(Zakopane, Kamil, 1)
+plot_flight_trajectory(Zakopane, Kamil, 11)

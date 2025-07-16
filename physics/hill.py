@@ -78,14 +78,15 @@ class Hill:
         self.clothoid_length = 2 * self.r1_min * (abs(self.gamma_rad - self.alpha_rad))  # Wyznacza długość klotoidy
         self.clothoid_parameter = self.r1_min * math.sqrt(2*abs(self.gamma_rad - self.alpha_rad))  # Parametr klotoidy (A)
 
-        # Współczynniki dla dwóch parabol
-        self.a_landing1 = 0.0
-        self.b_landing1 = 0.0
-        self.c_landing1 = 0.0
+        # Współczynniki dla pierwszej krzywej (polinom 3. stopnia) i drugiej paraboli
         self.a_landing2 = 0.0
         self.b_landing2 = 0.0
         self.c_landing2 = 0.0
-        self.landing_segment_boundaries = {'parabola1': (0, self.n), 'parabola2': (self.n, self.L)}
+        self.landing_segment_boundaries = {'polynomial1': (0, self.K), 'parabola2': (self.K, self.L)}
+
+        # Dodatkowe punkt dla pierwszej krzywej
+        self.x_F = 13
+        self.y_F = -4
 
         # Oblicz współczynniki parabol
         self.calculate_landing_parabola_coefficients()
@@ -111,33 +112,30 @@ class Hill:
         else:
             return 0.0
 
-
-    # Funkcja budująca wzór funkcji, który jest zeskokiem danej skoczni
-    def calculate_landing_profile(self, v, segment = "parabola1"):
-        if segment == "parabola1":
-            # Punkty dla pierwszej paraboli: (0, -s), (n, -h)
+    def calculate_landing_profile(self, v, segment='polynomial1'):
+        if segment == 'polynomial1':
+            # Punkty dla pierwszej krzywej: (0, -s), (x_F, y_F), (n, -h), nachylenie w x=n
             O_coord_x = 0.0
             O_coord_y = -self.s
+            F_coord_x = self.x_F
+            F_coord_y = self.y_F
             K_coord_x = self.n
             K_coord_y = -self.h
-
-            # Nachylenie w x=n (Punkt K)
             slope_K = -math.tan(self.beta_rad)
 
-            a, b, c = v
-            R = [0, 0, 0]
-            R[0] = a * O_coord_x ** 2 + b * O_coord_x + c - O_coord_y
-            R[1] = a * K_coord_x ** 2 + b * K_coord_x + c - K_coord_y
-            R[2] = 2 * a * K_coord_x + b - slope_K
+            a, b, c, d = v
+            R = [0, 0, 0, 0]
+            R[0] = a * O_coord_x ** 3 + b * O_coord_x ** 2 + c * O_coord_x + d - O_coord_y  # y(0) = -s
+            R[1] = a * F_coord_x ** 3 + b * F_coord_x ** 2 + c * F_coord_x + d - F_coord_y  # y(x_F) = y_F
+            R[2] = a * K_coord_x ** 3 + b * K_coord_x ** 2 + c * K_coord_x + d - K_coord_y  # y(n) = -h
+            R[3] = 3 * a * K_coord_x ** 2 + 2 * b * K_coord_x + c - slope_K  # y'(n) = -tan(beta_rad)
             return R
         else:
             # Punkty dla drugiej paraboli: (n, -h), (L, -Zu)
             K_coord_x = self.n
             K_coord_y = -self.h
-            U_coord_x = self.n + 60
+            U_coord_x = self.n + 50
             U_coord_y = -self.Zu
-
-            # Nachylenie w x=n (ciągłość z pierwszą parabolą)
             slope_K = -math.tan(self.beta_rad)
 
             a, b, c = v
@@ -148,11 +146,12 @@ class Hill:
             return R
 
     def calculate_landing_parabola_coefficients(self):
-        # Obliczanie współczynników pierwszej paraboli
-        coeffs1 = so.fsolve(self.calculate_landing_profile, np.array([0, 0, 0]), args=('parabola1',))
+        # Obliczanie współczynników pierwszej krzywej (polinom 3. stopnia)
+        coeffs1 = so.fsolve(self.calculate_landing_profile, np.array([0, 0, 0, 0]), args=('polynomial1',))
         self.a_landing1 = coeffs1[0]
         self.b_landing1 = coeffs1[1]
         self.c_landing1 = coeffs1[2]
+        self.d_landing1 = coeffs1[3]
 
         # Obliczanie współczynników drugiej paraboli
         coeffs2 = so.fsolve(self.calculate_landing_profile, np.array([0, 0, 0]), args=('parabola2',))
@@ -160,22 +159,22 @@ class Hill:
         self.b_landing2 = coeffs2[1]
         self.c_landing2 = coeffs2[2]
 
-        return {'parabola1': coeffs1, 'parabola2': coeffs2}
+        return {'polynomial1': coeffs1, 'parabola2': coeffs2}
 
     def y_landing(self, x: float) -> float:
-        # Ograniczenie dziedziny do [0, self.L]
-        if not (0 <= x <= self.n + 500):
-            raise ValueError(f"Wartość x={x} poza dziedziną [0, {self.n + 500}]")
+        # Ograniczenie dziedziny
+        if not (0 <= x <= self.n + self.a_finish + 50):
+            raise ValueError(f"Wartość x={x} poza dziedziną [0, {self.n + self.a_finish + 50}]")
 
         # Sprawdzenie, czy współczynniki są obliczone
-        if (self.a_landing1 == 0.0 and self.b_landing1 == 0.0 and self.c_landing1 == 0.0) or \
+        if (self.a_landing1 == 0.0 and self.b_landing1 == 0.0 and self.c_landing1 == 0.0 and self.d_landing1 == 0.0) or \
                 (self.a_landing2 == 0.0 and self.b_landing2 == 0.0 and self.c_landing2 == 0.0):
-            print("OSTRZEŻENIE: Współczynniki parabol nie zostały prawidłowo obliczone. Zwracam 0.")
+            print("OSTRZEŻENIE: Współczynniki krzywych nie zostały prawidłowo obliczone. Zwracam 0.")
             return 0.0
 
-        # Wybór odpowiedniej paraboli
+        # Wybór odpowiedniej krzywej
         if x <= self.n:
-            return self.a_landing1 * x ** 2 + self.b_landing1 * x + self.c_landing1
+            return self.a_landing1 * x ** 3 + self.b_landing1 * x ** 2 + self.c_landing1 * x + self.d_landing1
         else:
             return self.a_landing2 * x ** 2 + self.b_landing2 * x + self.c_landing2
 

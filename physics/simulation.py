@@ -192,11 +192,11 @@ def plot_flight_trajectory(Hill, Jumper, gate_number=None, time_contact=0.1):
 
 abc = Zakopane.calculate_landing_parabola_coefficients()
 print(abc)
-speed = inrun_simulation(Zakopane, Kamil, 34)
+speed = inrun_simulation(Zakopane, Kamil, 1)
 print(f"{round(speed*3.6, 2)} km/h")
 
 
 
-fly_simulation(Zakopane, Kamil, 34)
+fly_simulation(Zakopane, Kamil, 1)
 
-plot_flight_trajectory(Zakopane, Kamil, 34)
+plot_flight_trajectory(Zakopane, Kamil, 1)

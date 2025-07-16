@@ -33,7 +33,7 @@ class Hill:
                  L: float,                  # Koniec sterfy lądowania (zazwyczaj HS)
                  Zu: float,                 # Różnica wysokości między progiem a najniższym punktem zeskoku
 
-                 inrun_friction_coefficient: float = 0.025  # Współczynnik tarcia na najeździe
+                 inrun_friction_coefficient: float = 0.02  # Współczynnik tarcia na najeździe
                  ):
 
         self.name = name

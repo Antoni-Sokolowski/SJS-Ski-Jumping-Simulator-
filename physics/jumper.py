@@ -18,18 +18,19 @@ class Jumper:
 
                  # --- WYBICIE ---
                  takeoff_drag_coefficient: float = 1,           # Współczynnik oporu aerodynamicznego zawodnika podczas wybicia
-                 takeoff_frontal_area: float = 0.7,             # Powierzchnia czołowa zawodnika podczas wybicia
+                 takeoff_frontal_area: float = 0.8,             # Powierzchnia czołowa zawodnika podczas wybicia
                  takeoff_lift_coefficient: float = 0,           # Współczynnik siły nośnej zawodnika podczas wybicia
-                 takeoff_angle_changer_deg: float = 32,         # Wartość zmiany kątu wybicia zawodnika w stopniach
+                 takeoff_angle_changer_deg: float = 31,         # Wartość zmiany kątu wybicia zawodnika w stopniach
+                 jump_force = 1000,                             # Siła wybicia
 
                  # --- LOT ---
-                 flight_drag_coefficient: float = 0.85,         # Współczynnik oporu aerodynamicznego zawodnika w locie
-                 flight_frontal_area: float = 0.6,              # Powierzchnia czołowa zawodnika w locie
-                 flight_lift_coefficient: float = 0.65,          # Współczynnik siły nośnej zawodnika w locie
+                 flight_drag_coefficient: float = 0.88,         # Współczynnik oporu aerodynamicznego zawodnika w locie
+                 flight_frontal_area: float = 0.6,             # Powierzchnia czołowa zawodnika w locie
+                 flight_lift_coefficient: float = 0.55,          # Współczynnik siły nośnej zawodnika w locie
 
                  # --- LĄDOWANIE ---
-                 landing_drag_coefficient: float = 1,        # Współczynnik oporu aerodynamicznego zawodnika podczas lądowania
-                 landing_frontal_area: float = 0.9,             # Powierzchnia czołowa zawodnika podczas lądowania
+                 landing_drag_coefficient: float = 3,           # Współczynnik oporu aerodynamicznego zawodnika podczas lądowania
+                 landing_frontal_area: float = 1,               # Powierzchnia czołowa zawodnika podczas lądowania
                  landing_lift_coefficient: float = 0            # Współczynnik siły nośnej zawodnika podczas lądowania
                  ):
 
@@ -44,6 +45,7 @@ class Jumper:
         self.takeoff_frontal_area = takeoff_frontal_area
         self.takeoff_lift_coefficient = takeoff_lift_coefficient
         self.takeoff_angle_changer_deg = takeoff_angle_changer_deg
+        self.jump_force = jump_force
         self.flight_drag_coefficient = flight_drag_coefficient
         self.flight_frontal_area = flight_frontal_area
         self.flight_lift_coefficient = flight_lift_coefficient

@@ -6,6 +6,7 @@ from utils.constants import GRAVITY, AIR_DENSITY
 import math
 import numpy as np
 import scipy.optimize as so
+import matplotlib.pyplot as plt
 from hill import Hill
 from jumper import Jumper
 from utils.helpers import gravity_force_parallel, friction_force, drag_force
@@ -148,6 +149,47 @@ def fly_simulation(Hill, Jumper, gate_number=None, time_contact=0.1):
     return arc_length
 
 
+def plot_flight_trajectory(Hill, Jumper, gate_number=None, time_contact=0.1):
+    positions = [(0, 0)]
+    current_position_x, current_position_y = 0, 0
+    initial_total_velocity = inrun_simulation(Hill, Jumper, gate_number=gate_number, time_contact=time_contact)
+    takeoff_angle_rad = -Hill.alpha_rad + Jumper.takeoff_angle_changer_rad
+    v_perpendicular = (Jumper.jump_force * time_contact) / Jumper.mass
+    current_velocity_x = initial_total_velocity * math.cos(takeoff_angle_rad)
+    current_velocity_y = initial_total_velocity * math.sin(takeoff_angle_rad) + v_perpendicular
+    time_step = 0.01
+    while current_position_y > Hill.y_landing(current_position_x):
+        total_velocity = math.sqrt(current_velocity_x**2 + current_velocity_y**2)
+        angle_of_flight_rad = math.atan2(current_velocity_y, current_velocity_x)
+        force_g_y = -Jumper.mass * GRAVITY
+        force_drag_magnitude = 0.5 * AIR_DENSITY * Jumper.flight_drag_coefficient * Jumper.flight_frontal_area * total_velocity**2
+        force_drag_x = -force_drag_magnitude * math.cos(angle_of_flight_rad)
+        force_drag_y = -force_drag_magnitude * math.sin(angle_of_flight_rad)
+        force_lift_magnitude = 0.5 * AIR_DENSITY * Jumper.flight_lift_coefficient * Jumper.flight_frontal_area * total_velocity**2
+        force_lift_x = -force_lift_magnitude * math.sin(angle_of_flight_rad)
+        force_lift_y = force_lift_magnitude * math.cos(angle_of_flight_rad)
+        acceleration_x = (force_drag_x + force_lift_x) / Jumper.mass
+        acceleration_y = (force_g_y + force_drag_y + force_lift_y) / Jumper.mass
+        current_velocity_x += acceleration_x * time_step
+        current_velocity_y += acceleration_y * time_step
+        current_position_x += current_velocity_x * time_step
+        current_position_y += current_velocity_y * time_step
+        positions.append((current_position_x, current_position_y))
+    x, y = zip(*positions)
+    x_landing = np.linspace(0, Hill.L, 100)
+    y_landing = [Hill.y_landing(x) for x in x_landing]
+    plt.plot(x, y, 'r-', label='Trajektoria lotu')
+    plt.plot(x_landing, y_landing, 'g-', label='Profil lądowania')
+    plt.xlabel('Odległość (m)')
+    plt.ylabel('Wysokość (m)')
+    plt.title(f'Trajektoria skoku (belka={gate_number or Hill.gates}, kąt wybicia={math.degrees(takeoff_angle_rad):.1f}°, siła wybicia={Jumper.jump_force} N)')
+    plt.legend()
+    plt.grid(True)
+    plt.axis('equal')
+    plt.show()
+    return positions[-1][0]
+
+
 abc = Zakopane.calculate_landing_parabola_coefficients()
 print(abc)
 speed = inrun_simulation(Zakopane, Kamil, 34)
@@ -155,4 +197,6 @@ print(f"{round(speed*3.6, 2)} km/h")
 
 
 
-fly_simulation(Zakopane, Kamil, 1)
+fly_simulation(Zakopane, Kamil, 34)
+
+plot_flight_trajectory(Zakopane, Kamil, 34)

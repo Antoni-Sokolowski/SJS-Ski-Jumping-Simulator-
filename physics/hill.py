@@ -179,4 +179,4 @@ class Hill:
             return self.a_landing2 * x ** 2 + self.b_landing2 * x + self.c_landing2
 
     def __str__(self):
-        return f'Hill: {self.name} {self.K} {self.L}'
+        return f'Hill: {self.name} K{self.K} HS{self.L}'

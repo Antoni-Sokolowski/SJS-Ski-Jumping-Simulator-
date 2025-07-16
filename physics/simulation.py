@@ -9,8 +9,8 @@ import math
 import numpy as np
 import scipy.optimize as so
 import matplotlib.pyplot as plt
-from hill import Hill
-from jumper import Jumper
+from physics.hill import Hill
+from physics.jumper import Jumper
 from utils.helpers import gravity_force_parallel, friction_force, drag_force
 
 
@@ -27,7 +27,6 @@ def load_data_from_json(filename='data.json'):
     # 3. Połącz ścieżkę do głównego folderu z nazwą pliku
     filepath = project_dir / filename
 
-    print(f"Szukam pliku pod ścieżką: {filepath}")
 
     with open(filepath, 'r', encoding='utf-8') as f:
         data = json.load(f)
@@ -130,8 +129,6 @@ def fly_simulation(Hill, Jumper, gate_number=None, time_contact=0.1):
         arc_length += segment_length
         x_current_arc = x_next_arc
 
-    print(f"Skoczek wylądował na x={landing_x:.2f}, y={current_position_y:.2f} po {iteration} krokach.")
-    print(f"Długość skoku: {arc_length:.2f} metrów")
     return arc_length
 
 
@@ -186,12 +183,12 @@ def plot_flight_trajectory(Hill, Jumper, gate_number=None, time_contact=0.1):
     return positions[-1][0]
 
 
+if __name__ == "__main__":
+    speed = inrun_simulation(Zakopane, Kamil,11)
+    print(f"{round(speed*3.6, 2)} km/h")
 
-speed = inrun_simulation(Zakopane, Kamil,11)
-print(f"{round(speed*3.6, 2)} km/h")
 
 
+    fly_simulation(Zakopane, Kamil, 11)
 
-fly_simulation(Zakopane, Kamil, 11)
-
-plot_flight_trajectory(Zakopane, Kamil, 11)
+    plot_flight_trajectory(Zakopane, Kamil, 11)

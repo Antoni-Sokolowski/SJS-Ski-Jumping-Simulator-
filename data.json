@@ -26,6 +26,33 @@
       "L": 140,
       "Zu": 89.11,
       "inrun_friction_coefficient": 0.02
+    },
+    {
+      "name": "Courchevel",
+      "e1": 104.65,
+      "e2": 80.3,
+      "gates": 39,
+      "t": 6.8,
+      "gamma_deg": 35,
+      "alpha_deg": 11.5,
+      "r1": 108,
+      "h": 62.45,
+      "n": 107.13,
+      "s": 3.9,
+      "l1": 15.57,
+      "l2": 6.68,
+      "a_finish": 98,
+      "betaP_deg": 37.5,
+      "beta_deg": 34,
+      "betaL_deg": 32.5,
+      "rl": 255,
+      "r2l": 131,
+      "r2": 131,
+      "P": 109,
+      "K": 125,
+      "L": 132,
+      "Zu": 85.17,
+      "inrun_friction_coefficient": 0.02
     }
   ],
   "jumpers": [
@@ -34,6 +61,11 @@
       "last_name": "Stoch",
       "mass": 60,
       "height": 1.72
+    },
+    {
+      "name": "Stanisław",
+      "last_name": "Marusarz",
+      "mass": 70
     }
   ]
 }

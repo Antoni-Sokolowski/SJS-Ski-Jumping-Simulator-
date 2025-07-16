@@ -21,7 +21,7 @@ class Jumper:
                  takeoff_frontal_area: float = 0.8,             # Powierzchnia czołowa zawodnika podczas wybicia
                  takeoff_lift_coefficient: float = 0,           # Współczynnik siły nośnej zawodnika podczas wybicia
                  takeoff_angle_changer_deg: float = 31,         # Wartość zmiany kątu wybicia zawodnika w stopniach
-                 jump_force = 1000,                             # Siła wybicia
+                 jump_force = 1500,                             # Siła wybicia
 
                  # --- LOT ---
                  flight_drag_coefficient: float = 0.88,         # Współczynnik oporu aerodynamicznego zawodnika w locie

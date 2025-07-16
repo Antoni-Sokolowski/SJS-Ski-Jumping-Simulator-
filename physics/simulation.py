@@ -49,7 +49,7 @@ def inrun_simulation(Hill, Jumper, gate_number=None, time_contact=0.1):
     time_step = 0.001
     current_velocity = 0
     distance_to_takeoff = Hill.e2 + (gate_number - 1) * Hill.gate_diff
-    if distance_to_takeoff > Hill.e1:
+    if distance_to_takeoff > Hill.e1 or distance_to_takeoff < Hill.e2:
         raise ValueError(f"Belka startowa {gate_number} jest poza zakresem najazdu (max {Hill.gates})")
 
     while distance_to_takeoff > 0:
@@ -176,7 +176,7 @@ def plot_flight_trajectory(Hill, Jumper, gate_number=None, time_contact=0.1):
         current_position_y += current_velocity_y * time_step
         positions.append((current_position_x, current_position_y))
     x, y = zip(*positions)
-    x_landing = np.linspace(0, Hill.L, 100)
+    x_landing = np.linspace(0, Hill.L + 50, 100)
     y_landing = [Hill.y_landing(x) for x in x_landing]
     plt.plot(x, y, 'r-', label='Trajektoria lotu')
     plt.plot(x_landing, y_landing, 'g-', label='Profil lądowania')

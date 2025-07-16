@@ -78,13 +78,17 @@ class Hill:
         self.clothoid_length = 2 * self.r1_min * (abs(self.gamma_rad - self.alpha_rad))  # Wyznacza długość klotoidy
         self.clothoid_parameter = self.r1_min * math.sqrt(2*abs(self.gamma_rad - self.alpha_rad))  # Parametr klotoidy (A)
 
-        # Atrybuty dla profilu lądowania - zostaną obliczone
-        self.a_landing = 0.0
-        self.b_landing = 0.0
-        self.c_landing = 0.0
-        self.landing_segment_boundaries = {}  # Słownik do przechowywania zakresów x dla segmentów
+        # Współczynniki dla dwóch parabol
+        self.a_landing1 = 0.0
+        self.b_landing1 = 0.0
+        self.c_landing1 = 0.0
+        self.a_landing2 = 0.0
+        self.b_landing2 = 0.0
+        self.c_landing2 = 0.0
+        self.landing_segment_boundaries = {'parabola1': (0, self.n), 'parabola2': (self.n, self.L)}
 
-
+        # Oblicz współczynniki parabol
+        self.calculate_landing_parabola_coefficients()
 
     def get_inrun_angle(self,
                         distance_from_takeoff: float  # Odległość po krzywej od progu (T) w górę rozbiegu
@@ -109,54 +113,71 @@ class Hill:
 
 
     # Funkcja budująca wzór funkcji, który jest zeskokiem danej skoczni
-    def calculate_landing_profile(self, v):
+    def calculate_landing_profile(self, v, segment = "parabola1"):
+        if segment == "parabola1":
+            # Punkty dla pierwszej paraboli: (0, -s), (n, -h)
+            O_coord_x = 0.0
+            O_coord_y = -self.s
+            K_coord_x = self.n
+            K_coord_y = -self.h
 
-        # Współrzędne punktu O na zeskoku (Start zeskoku)
-        O_coord_x = 0.0
-        O_coord_y = -self.s
+            # Nachylenie w x=n (Punkt K)
+            slope_K = -math.tan(self.beta_rad)
 
-        # Współrzędne punktu K na zeskoku
-        K_coord_x = self.n
-        K_coord_y = -self.h
+            a, b, c = v
+            R = [0, 0, 0]
+            R[0] = a * O_coord_x ** 2 + b * O_coord_x + c - O_coord_y
+            R[1] = a * K_coord_x ** 2 + b * K_coord_x + c - K_coord_y
+            R[2] = 2 * a * K_coord_x + b - slope_K
+            return R
+        else:
+            # Punkty dla drugiej paraboli: (n, -h), (L, -Zu)
+            K_coord_x = self.n
+            K_coord_y = -self.h
+            U_coord_x = self.n + 60
+            U_coord_y = -self.Zu
 
-        # Współrzędne punkt L na zeskoku
-        L_coord_x = K_coord_x + math.cos(self.betaL_rad) * abs(self.L - self.K)
-        L_coord_y = K_coord_y - math.sin(self.betaL_rad) * abs(self.L - self.K)
+            # Nachylenie w x=n (ciągłość z pierwszą parabolą)
+            slope_K = -math.tan(self.beta_rad)
 
-        # Układ równań 3 niewiadomych
-        # O_coord_y = self.a_landing * O_coord_x ** 2 + self.b_landing * O_coord_x + self.c_landing
-        # K_coord_y = self.a_landing * K_coord_x ** 2 + self.b_landing * K_coord_x + self.c_landing
-        # L_coord_y = self.a_landing * L_coord_x ** 2 + self.b_landing * L_coord_x + self.c_landing
-
-
-        a = v[0]
-        b = v[1]
-        c = v[2]
-        R = [0, 0, 0]
-        R[0] = a * pow(O_coord_x, 2) + b * O_coord_x + c - O_coord_y
-        R[1] = a * pow(K_coord_x, 2) + b * K_coord_x + c - K_coord_y
-        R[2] = a * pow(L_coord_x, 2) + b * L_coord_x + c - L_coord_y
-
-        return R
-
+            a, b, c = v
+            R = [0, 0, 0]
+            R[0] = a * K_coord_x ** 2 + b * K_coord_x + c - K_coord_y  # y(n) = -h
+            R[1] = a * U_coord_x ** 2 + b * U_coord_x + c - U_coord_y  # y(L) = -Zu
+            R[2] = 2 * a * K_coord_x + b - slope_K  # y'(n) = -tan(beta_rad)
+            return R
 
     def calculate_landing_parabola_coefficients(self):
-        coefficients = so.fsolve(self.calculate_landing_profile, np.array([0, 0, 0]))
-        self.a_landing = coefficients[0]
-        self.b_landing = coefficients[1]
-        self.c_landing = coefficients[2]
+        # Obliczanie współczynników pierwszej paraboli
+        coeffs1 = so.fsolve(self.calculate_landing_profile, np.array([0, 0, 0]), args=('parabola1',))
+        self.a_landing1 = coeffs1[0]
+        self.b_landing1 = coeffs1[1]
+        self.c_landing1 = coeffs1[2]
 
-        return coefficients
+        # Obliczanie współczynników drugiej paraboli
+        coeffs2 = so.fsolve(self.calculate_landing_profile, np.array([0, 0, 0]), args=('parabola2',))
+        self.a_landing2 = coeffs2[0]
+        self.b_landing2 = coeffs2[1]
+        self.c_landing2 = coeffs2[2]
 
+        return {'parabola1': coeffs1, 'parabola2': coeffs2}
 
-    # Funkcja określająca wysokść zeskoku dla poziomej odległości od progu
     def y_landing(self, x: float) -> float:
-       if self.a_landing == 0.0 and self.b_landing == 0.0 and self.c_landing == 0.0:
-            print("OSTRZEŻENIE: Współczynniki paraboli nie zostały prawidłowo obliczone. Zwracam 0.")
+        # Ograniczenie dziedziny do [0, self.L]
+        if not (0 <= x <= self.n + 500):
+            raise ValueError(f"Wartość x={x} poza dziedziną [0, {self.n + 500}]")
+
+        # Sprawdzenie, czy współczynniki są obliczone
+        if (self.a_landing1 == 0.0 and self.b_landing1 == 0.0 and self.c_landing1 == 0.0) or \
+                (self.a_landing2 == 0.0 and self.b_landing2 == 0.0 and self.c_landing2 == 0.0):
+            print("OSTRZEŻENIE: Współczynniki parabol nie zostały prawidłowo obliczone. Zwracam 0.")
             return 0.0
 
-       return self.a_landing * pow(x, 2) + self.b_landing * x + self.c_landing
-
+        # Wybór odpowiedniej paraboli
+        if x <= self.n:
+            return self.a_landing1 * x ** 2 + self.b_landing1 * x + self.c_landing1
+        else:
+            return self.a_landing2 * x ** 2 + self.b_landing2 * x + self.c_landing2
 
     def __str__(self):
         return f'Hill: {self.name} {self.K} {self.L}'

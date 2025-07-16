@@ -1,13 +1,19 @@
 import sys
-from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QSpinBox, QPushButton, QTextEdit, QLabel, QStackedWidget
-from PySide6.QtCore import Qt
+import os
+from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QSpinBox, QPushButton, QTextEdit, QLabel, QStackedWidget, QSlider
+from PySide6.QtCore import Qt, QUrl
+from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import numpy as np
 import math
+from PIL import Image
+import scipy.io.wavfile as wavfile
 from physics.simulation import load_data_from_json, inrun_simulation, fly_simulation
+from physics.hill import Hill
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -15,85 +21,138 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Ski Jumping Simulator")
         self.setGeometry(100, 100, 1000, 750)
 
-        # Theme state
+        # Theme, contrast, and volume state
         self.current_theme = "dark"
+        self.contrast_level = 1.0  # Default contrast
+        self.volume_level = 0.3  # Default volume (30%)
         self.themes = {
-            "dark": """
-                QMainWindow, QWidget {
-                    background-color: #1e1e2e;
-                }
-                QLabel {
-                    color: #cdd6f4;
+            "dark": lambda contrast: f"""
+                QMainWindow, QWidget {{
+                    background-color: #{self.adjust_brightness('1a1a1a', contrast)};
+                }}
+                QLabel {{
+                    color: #{self.adjust_brightness('ffffff', contrast)};
                     font-size: 16px;
-                    font-family: 'Segoe UI', Arial, sans-serif;
-                }
-                QComboBox, QSpinBox, QTextEdit {
-                    background-color: #313244;
-                    color: #cdd6f4;
-                    border: 1px solid #45475a;
-                    padding: 8px;
-                    border-radius: 8px;
-                    font-size: 14px;
-                }
-                QComboBox::drop-down, QSpinBox::up-button, QSpinBox::down-button {
-                    border: none;
-                }
-                QPushButton {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #f38ba8, stop:1 #f9e2af);
-                    color: #1e1e2e;
+                    font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+                }}
+                QComboBox, QSpinBox, QTextEdit, QSlider::groove {{
+                    background-color: #{self.adjust_brightness('2a2a2a', contrast)};
+                    color: #{self.adjust_brightness('ffffff', contrast)};
                     border: none;
                     padding: 12px;
-                    border-radius: 8px;
+                    border-radius: 5px;
                     font-size: 16px;
-                    font-weight: bold;
-                    font-family: 'Segoe UI', Arial, sans-serif;
-                }
-                QPushButton:hover {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #f9e2af, stop:1 #f38ba8);
-                }
-                QPushButton:pressed {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #cdd6f4, stop:1 #89b4fa);
-                }
+                }}
+                QComboBox::drop-down, QSpinBox::up-button, QSpinBox::down-button {{
+                    border: none;
+                }}
+                QSlider::handle {{
+                    background: #{self.adjust_brightness('0078d4', contrast)};
+                    border: none;
+                    width: 18px;
+                    margin: -4px 0;
+                    border-radius: 9px;
+                }}
+                QPushButton {{
+                    background-color: #{self.adjust_brightness('0078d4', contrast)};
+                    color: #{self.adjust_brightness('ffffff', contrast)};
+                    border: none;
+                    padding: 15px;
+                    border-radius: 5px;
+                    font-size: 18px;
+                    font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+                }}
+                QPushButton:hover {{
+                    background-color: #{self.adjust_brightness('005ea6', contrast)};
+                }}
+                QPushButton:pressed {{
+                    background-color: #{self.adjust_brightness('004d87', contrast)};
+                }}
+                QLabel#authorLabel {{
+                    color: #{self.adjust_brightness('b0b0b0', contrast)};
+                    font-size: 12px;
+                    font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+                }}
             """,
-            "light": """
-                QMainWindow, QWidget {
-                    background-color: #f5f5f5;
-                }
-                QLabel {
-                    color: #1c2526;
+            "light": lambda contrast: f"""
+                QMainWindow, QWidget {{
+                    background-color: #{self.adjust_brightness('f0f0f0', contrast)};
+                }}
+                QLabel {{
+                    color: #{self.adjust_brightness('1a1a1a', contrast)};
                     font-size: 16px;
-                    font-family: 'Segoe UI', Arial, sans-serif;
-                }
-                QComboBox, QSpinBox, QTextEdit {
-                    background-color: #ffffff;
-                    color: #1c2526;
-                    border: 1px solid #d1d5db;
-                    padding: 8px;
-                    border-radius: 8px;
-                    font-size: 14px;
-                }
-                QComboBox::drop-down, QSpinBox::up-button, QSpinBox::down-button {
-                    border: none;
-                }
-                QPushButton {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #60a5fa, stop:1 #a5b4fc);
-                    color: #1c2526;
+                    font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+                }}
+                QComboBox, QSpinBox, QTextEdit, QSlider::groove {{
+                    background-color: #{self.adjust_brightness('ffffff', contrast)};
+                    color: #{self.adjust_brightness('1a1a1a', contrast)};
                     border: none;
                     padding: 12px;
-                    border-radius: 8px;
+                    border-radius: 5px;
                     font-size: 16px;
-                    font-weight: bold;
-                    font-family: 'Segoe UI', Arial, sans-serif;
-                }
-                QPushButton:hover {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #a5b4fc, stop:1 #60a5fa);
-                }
-                QPushButton:pressed {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #bfdbfe, stop:1 #dbeafe);
-                }
+                }}
+                QComboBox::drop-down, QSpinBox::up-button, QSpinBox::down-button {{
+                    border: none;
+                }}
+                QSlider::handle {{
+                    background: #{self.adjust_brightness('0078d4', contrast)};
+                    border: none;
+                    width: 18px;
+                    margin: -4px 0;
+                    border-radius: 9px;
+                }}
+                QPushButton {{
+                    background-color: #{self.adjust_brightness('0078d4', contrast)};
+                    color: #{self.adjust_brightness('ffffff', contrast)};
+                    border: none;
+                    padding: 15px;
+                    border-radius: 5px;
+                    font-size: 18px;
+                    font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+                }}
+                QPushButton:hover {{
+                    background-color: #{self.adjust_brightness('005ea6', contrast)};
+                }}
+                QPushButton:pressed {{
+                    background-color: #{self.adjust_brightness('004d87', contrast)};
+                }}
+                QLabel#authorLabel {{
+                    color: #{self.adjust_brightness('404040', contrast)};
+                    font-size: 12px;
+                    font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+                }}
             """
         }
-        self.setStyleSheet(self.themes[self.current_theme])
+        self.setStyleSheet(self.themes[self.current_theme](self.contrast_level))
+
+        # Sound effect with QMediaPlayer
+        self.player = QMediaPlayer()
+        self.audio_output = QAudioOutput()
+        self.player.setAudioOutput(self.audio_output)
+        sound_file = os.path.abspath("click.wav")
+        if not os.path.exists(sound_file):
+            print(f"BŁĄD: Plik '{sound_file}' nie znaleziony!")
+            self.result_text = QTextEdit()  # Initialize early for error message
+            self.result_text.setText("BŁĄD: Plik 'click.wav' nie znaleziony! Umieść poprawny plik WAV w folderze projektu.")
+            self.sound_loaded = False
+        else:
+            try:
+                sample_rate, _ = wavfile.read(sound_file)
+                if sample_rate not in [44100, 48000]:
+                    print(f"BŁĄD: Plik '{sound_file}' ma nieodpowiednią częstotliwość próbkowania ({sample_rate} Hz). Wymagane: 44100 lub 48000 Hz.")
+                    self.result_text = QTextEdit()
+                    self.result_text.setText("BŁĄD: Plik 'click.wav' ma nieodpowiedni format. Użyj WAV 44100/48000 Hz, 16-bit PCM.")
+                    self.sound_loaded = False
+                else:
+                    self.player.setSource(QUrl.fromLocalFile(sound_file))
+                    self.audio_output.setVolume(self.volume_level)
+                    self.sound_loaded = True
+                    print(f"Dźwięk załadowany: {self.sound_loaded}")
+            except Exception as e:
+                print(f"BŁĄD: Nie można odczytać pliku '{sound_file}': {str(e)}")
+                self.result_text = QTextEdit()
+                self.result_text.setText(f"BŁĄD: Nie można odczytać 'click.wav': {str(e)}. Umieść poprawny plik WAV w folderze projektu.")
+                self.sound_loaded = False
 
         # Central widget with stacked layout
         self.central_widget = QStackedWidget()
@@ -103,38 +162,43 @@ class MainWindow(QMainWindow):
         main_menu_widget = QWidget()
         main_menu_layout = QVBoxLayout(main_menu_widget)
         main_menu_layout.setAlignment(Qt.AlignCenter)
-        main_menu_layout.setSpacing(20)
+        main_menu_layout.setSpacing(35)
+        main_menu_layout.setContentsMargins(20, 20, 20, 20)
 
         title_label = QLabel("Ski Jumping Simulator")
-        title_label.setStyleSheet("font-size: 32px; font-weight: bold; color: #f38ba8;" if self.current_theme == "dark" else "font-size: 32px; font-weight: bold; color: #2563eb;")
+        title_label.setStyleSheet(f"font-size: 28px; font-weight: bold; color: {'#0078d4'};")
         main_menu_layout.addWidget(title_label)
 
         simulation_button = QPushButton("Symulacja")
-        simulation_button.clicked.connect(lambda: self.central_widget.setCurrentIndex(1))
+        simulation_button.clicked.connect(lambda: [self.play_sound(), self.central_widget.setCurrentIndex(1)])
         main_menu_layout.addWidget(simulation_button)
 
+        description_button = QPushButton("Opis Projektu")
+        description_button.clicked.connect(lambda: [self.play_sound(), self.central_widget.setCurrentIndex(2)])
+        main_menu_layout.addWidget(description_button)
+
         settings_button = QPushButton("Ustawienia")
-        settings_button.clicked.connect(lambda: self.central_widget.setCurrentIndex(2))
+        settings_button.clicked.connect(lambda: [self.play_sound(), self.central_widget.setCurrentIndex(3)])
         main_menu_layout.addWidget(settings_button)
 
         exit_button = QPushButton("Wyjdź")
-        exit_button.clicked.connect(self.close)
+        exit_button.clicked.connect(lambda: [self.play_sound(), self.close()])
         main_menu_layout.addWidget(exit_button)
+
+        author_label = QLabel("Antoni Sokołowski")
+        author_label.setObjectName("authorLabel")
+        author_label.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
+        main_menu_layout.addWidget(author_label)
+        main_menu_layout.addStretch()
 
         # Simulation screen
         simulation_widget = QWidget()
         simulation_layout = QVBoxLayout(simulation_widget)
-        simulation_layout.setSpacing(15)
+        simulation_layout.setSpacing(25)
         simulation_layout.setContentsMargins(20, 20, 20, 20)
 
-        # Load data
-        self.all_hills, self.all_jumpers = load_data_from_json()
-        self.selected_jumper = None
-        self.selected_hill = None
-
-        # Header
         sim_header_label = QLabel("Symulacja skoku")
-        sim_header_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #f38ba8;" if self.current_theme == "dark" else "font-size: 24px; font-weight: bold; color: #2563eb;")
+        sim_header_label.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {'#0078d4'};")
         sim_header_label.setAlignment(Qt.AlignCenter)
         simulation_layout.addWidget(sim_header_label)
 
@@ -143,6 +207,7 @@ class MainWindow(QMainWindow):
         jumper_label = QLabel("Zawodnik:")
         self.jumper_combo = QComboBox()
         self.jumper_combo.addItem("Wybierz zawodnika")
+        self.all_hills, self.all_jumpers = load_data_from_json()
         for jumper in self.all_jumpers:
             self.jumper_combo.addItem(str(jumper))
         self.jumper_combo.currentIndexChanged.connect(self.update_jumper)
@@ -175,36 +240,69 @@ class MainWindow(QMainWindow):
         # Buttons
         button_layout = QHBoxLayout()
         self.simulate_button = QPushButton("Uruchom symulację")
-        self.simulate_button.clicked.connect(self.run_simulation)
+        self.simulate_button.clicked.connect(lambda: [self.play_sound(), self.run_simulation()])
         self.clear_button = QPushButton("Wyczyść")
-        self.clear_button.clicked.connect(self.clear_results)
+        self.clear_button.clicked.connect(lambda: [self.play_sound(), self.clear_results()])
         button_layout.addWidget(self.simulate_button)
         button_layout.addWidget(self.clear_button)
         simulation_layout.addLayout(button_layout)
 
         back_button = QPushButton("Powrót")
-        back_button.clicked.connect(lambda: self.central_widget.setCurrentIndex(0))
+        back_button.clicked.connect(lambda: [self.play_sound(), self.central_widget.setCurrentIndex(0)])
         simulation_layout.addWidget(back_button)
 
         # Result display
-        self.result_text = QTextEdit()
+        self.result_text = QTextEdit() if not hasattr(self, 'result_text') else self.result_text
         self.result_text.setReadOnly(True)
-        self.result_text.setFixedHeight(100)
+        self.result_text.setFixedHeight(70)
         simulation_layout.addWidget(self.result_text)
 
         # Matplotlib canvas
-        self.figure = Figure(facecolor='#1e1e2e' if self.current_theme == "dark" else '#f5f5f5')
+        self.figure = Figure(facecolor=f"#{self.adjust_brightness('1a1a1a' if self.current_theme == 'dark' else 'f0f0f0', self.contrast_level)}")
         self.canvas = FigureCanvas(self.figure)
         simulation_layout.addWidget(self.canvas)
+
+        sim_author_label = QLabel("Antoni Sokołowski")
+        sim_author_label.setObjectName("authorLabel")
+        sim_author_label.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
+        simulation_layout.addWidget(sim_author_label)
+        simulation_layout.addStretch()
+
+        # Description screen
+        description_widget = QWidget()
+        description_layout = QVBoxLayout(description_widget)
+        description_layout.setSpacing(25)
+        description_layout.setContentsMargins(20, 20, 20, 20)
+
+        desc_header_label = QLabel("Opis Projektu")
+        desc_header_label.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {'#0078d4'};")
+        desc_header_label.setAlignment(Qt.AlignCenter)
+        description_layout.addWidget(desc_header_label)
+
+        self.description_text = QTextEdit()
+        self.description_text.setReadOnly(True)
+        self.description_text.setText("Tutaj pojawi się opis projektu.")
+        description_layout.addWidget(self.description_text)
+
+        desc_back_button = QPushButton("Powrót")
+        desc_back_button.clicked.connect(lambda: [self.play_sound(), self.central_widget.setCurrentIndex(0)])
+        description_layout.addWidget(desc_back_button)
+
+        desc_author_label = QLabel("Antoni Sokołowski")
+        desc_author_label.setObjectName("authorLabel")
+        desc_author_label.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
+        description_layout.addWidget(desc_author_label)
+        description_layout.addStretch()
 
         # Settings screen
         settings_widget = QWidget()
         settings_layout = QVBoxLayout(settings_widget)
         settings_layout.setAlignment(Qt.AlignCenter)
-        settings_layout.setSpacing(20)
+        settings_layout.setSpacing(25)
+        settings_layout.setContentsMargins(20, 20, 20, 20)
 
         settings_header = QLabel("Ustawienia")
-        settings_header.setStyleSheet("font-size: 24px; font-weight: bold; color: #f38ba8;" if self.current_theme == "dark" else "font-size: 24px; font-weight: bold; color: #2563eb;")
+        settings_header.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {'#0078d4'};")
         settings_layout.addWidget(settings_header)
 
         theme_layout = QHBoxLayout()
@@ -216,19 +314,61 @@ class MainWindow(QMainWindow):
         theme_layout.addWidget(self.theme_combo)
         settings_layout.addLayout(theme_layout)
 
+        contrast_layout = QHBoxLayout()
+        contrast_label = QLabel("Kontrast:")
+        self.contrast_slider = QSlider(Qt.Horizontal)
+        self.contrast_slider.setMinimum(50)  # 0.5x brightness
+        self.contrast_slider.setMaximum(150)  # 1.5x brightness
+        self.contrast_slider.setValue(100)  # Default 1.0
+        self.contrast_slider.valueChanged.connect(self.change_contrast)
+        contrast_layout.addWidget(contrast_label)
+        contrast_layout.addWidget(self.contrast_slider)
+        settings_layout.addLayout(contrast_layout)
+
+        volume_layout = QHBoxLayout()
+        volume_label = QLabel("Głośność:")
+        self.volume_slider = QSlider(Qt.Horizontal)
+        self.volume_slider.setMinimum(0)  # 0% volume
+        self.volume_slider.setMaximum(100)  # 100% volume
+        self.volume_slider.setValue(int(self.volume_level * 100))  # Default 30%
+        self.volume_slider.valueChanged.connect(self.change_volume)
+        volume_layout.addWidget(volume_label)
+        volume_layout.addWidget(self.volume_slider)
+        settings_layout.addLayout(volume_layout)
+
         settings_back_button = QPushButton("Powrót")
-        settings_back_button.clicked.connect(lambda: self.central_widget.setCurrentIndex(0))
+        settings_back_button.clicked.connect(lambda: [self.play_sound(), self.central_widget.setCurrentIndex(0)])
         settings_layout.addWidget(settings_back_button)
+
+        settings_author_label = QLabel("Antoni Sokołowski")
+        settings_author_label.setObjectName("authorLabel")
+        settings_author_label.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
+        settings_layout.addWidget(settings_author_label)
+        settings_layout.addStretch()
 
         # Add widgets to stacked layout
         self.central_widget.addWidget(main_menu_widget)
         self.central_widget.addWidget(simulation_widget)
+        self.central_widget.addWidget(description_widget)
         self.central_widget.addWidget(settings_widget)
 
         # Animation data
         self.positions = []
         self.x_landing = []
         self.y_landing = []
+        self.selected_jumper = None
+        self.selected_hill = None
+        self.ani = None  # Store animation to prevent garbage collection
+
+    def play_sound(self):
+        if hasattr(self, 'sound_loaded') and self.sound_loaded:
+            self.player.play()
+
+    def adjust_brightness(self, hex_color, contrast):
+        hex_color = hex_color.lstrip('#')
+        rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        rgb = [min(max(int(c * contrast), 0), 255) for c in rgb]
+        return f"{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
 
     def update_jumper(self):
         index = self.jumper_combo.currentIndex()
@@ -252,17 +392,34 @@ class MainWindow(QMainWindow):
         self.positions = []
         self.x_landing = []
         self.y_landing = []
+        if self.ani:
+            self.ani.event_source.stop()
+            self.ani = None
+        if not hasattr(self, 'sound_loaded') or not self.sound_loaded:
+            self.result_text.setText("BŁĄD: Plik 'click.wav' nie znaleziony lub nieprawidłowy. Użyj WAV 44100/48000 Hz, 16-bit PCM.")
 
     def change_theme(self, theme):
         self.current_theme = "dark" if theme == "Ciemny" else "light"
-        self.setStyleSheet(self.themes[self.current_theme])
-        title_color = "#f38ba8" if self.current_theme == "dark" else "#2563eb"
+        self.update_styles()
+
+    def change_contrast(self):
+        self.contrast_level = self.contrast_slider.value() / 100.0
+        self.update_styles()
+
+    def change_volume(self):
+        self.volume_level = self.volume_slider.value() / 100.0
+        if hasattr(self, 'sound_loaded') and self.sound_loaded:
+            self.audio_output.setVolume(self.volume_level)
+
+    def update_styles(self):
+        self.setStyleSheet(self.themes[self.current_theme](self.contrast_level))
+        title_color = "#0078d4"
         for i in range(self.central_widget.count()):
             widget = self.central_widget.widget(i)
             for label in widget.findChildren(QLabel):
-                if "Ski Jumping Simulator" in label.text() or "Symulacja skoku" in label.text() or "Ustawienia" in label.text():
+                if "Ski Jumping Simulator" in label.text() or "Symulacja skoku" in label.text() or "Ustawienia" in label.text() or "Opis Projektu" in label.text():
                     label.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {title_color};")
-        self.figure.set_facecolor('#1e1e2e' if self.current_theme == "dark" else '#f5f5f5')
+        self.figure.set_facecolor(f"#{self.adjust_brightness('1a1a1a' if self.current_theme == 'dark' else 'f0f0f0', self.contrast_level)}")
         self.canvas.draw()
 
     def run_simulation(self):
@@ -295,7 +452,9 @@ class MainWindow(QMainWindow):
             current_velocity_x = initial_total_velocity * math.cos(takeoff_angle_rad)
             current_velocity_y = initial_total_velocity * math.sin(takeoff_angle_rad) + v_perpendicular
             time_step = 0.01
-            while current_position_y > self.selected_hill.y_landing(current_position_x):
+            max_hill_length = self.selected_hill.n + self.selected_hill.a_finish + 50
+            max_height = 0
+            while current_position_y > self.selected_hill.y_landing(current_position_x) and current_position_x < max_hill_length:
                 total_velocity = math.sqrt(current_velocity_x ** 2 + current_velocity_y ** 2)
                 angle_of_flight_rad = math.atan2(current_velocity_y, current_velocity_x)
                 force_g_y = -self.selected_jumper.mass * 9.81
@@ -311,50 +470,106 @@ class MainWindow(QMainWindow):
                 current_velocity_y += acceleration_y * time_step
                 current_position_x += current_velocity_x * time_step
                 current_position_y += current_velocity_y * time_step
+                max_height = max(max_height, current_position_y)
+                if current_position_x >= max_hill_length:
+                    current_position_x = max_hill_length
+                    current_position_y = self.selected_hill.y_landing(current_position_x)
+                    self.positions.append((current_position_x, current_position_y))
+                    self.result_text.append("\nUWAGA: Skok przekroczył maksymalną długość skoczni!")
+                    break
                 self.positions.append((current_position_x, current_position_y))
-            self.x_landing = np.linspace(0, current_position_x + 50, 200)
+            self.x_landing = np.linspace(0, min(current_position_x + 50, max_hill_length), 100)  # Reduced points
             self.y_landing = [self.selected_hill.y_landing(x_val) for x_val in self.x_landing]
 
-            # Animate plot
-            plt.style.use('ggplot')
+            # Animate minimalist ski jump with fixed view and adjusted scale
             self.figure.clear()
-            ax = self.figure.add_subplot(111, facecolor='#313244' if self.current_theme == "dark" else '#ffffff')
-            line1, = ax.plot([], [], 'r-', linewidth=2.5, label='Trajektoria lotu', alpha=0.8)
-            line2, = ax.plot([], [], 'g-', linewidth=2.5, label='Profil lądowania', alpha=0.8)
+            ax = self.figure.add_subplot(111)
+            ax.set_facecolor(f"#{self.adjust_brightness('1a1a1a' if self.current_theme == 'dark' else 'f0f0f0', self.contrast_level)}")
+            self.figure.patch.set_facecolor(f"#{self.adjust_brightness('1a1a1a' if self.current_theme == 'dark' else 'f0f0f0', self.contrast_level)}")
+            ax.axis('off')  # Remove axes for minimalist look
+            ax.set_xlim(0, max_hill_length + 10)  # Margin for visibility
+            ax.set_ylim(min(min(self.y_landing), 0) - 5, max_height * 1.5 + 5)  # Adjusted Y scale for steeper look
+            ax.set_aspect('auto')  # Allow non-equal scaling for realistic proportions
+
+            # Load skier icon
+            skier_icon = None
+            if os.path.exists("skier.png"):
+                try:
+                    skier_img = Image.open("skier.png")
+                    skier_img = skier_img.resize((20, 20))
+                    skier_icon = OffsetImage(skier_img, zoom=1)
+                except Exception as e:
+                    self.result_text.append(f"\nBŁĄD: Nie udało się załadować 'skier.png': {str(e)}. Używam kropki.")
+            else:
+                self.result_text.append("\nBŁĄD: Plik 'skier.png' nie znaleziony! Używam kropki.")
+
+            # Initialize plot elements
+            if skier_icon:
+                ab = AnnotationBbox(skier_icon, (0, 0), frameon=False)
+                ax.add_artist(ab)
+                plot_elements = [ab]
+            else:
+                jumper_point, = ax.plot([], [], 'ro', markersize=8)
+                plot_elements = [jumper_point]
+            trail_line, = ax.plot([], [], color='#4da8ff', linewidth=2, alpha=0.5)  # Trail
+            landing_line, = ax.plot([], [], color='#00aaff', linewidth=3)  # Landing profile
+            plot_elements.extend([trail_line, landing_line])
 
             def init():
-                ax.set_xlabel('Odległość (m)', fontsize=12, color='#cdd6f4' if self.current_theme == "dark" else '#1c2526')
-                ax.set_ylabel('Wysokość (m)', fontsize=12, color='#cdd6f4' if self.current_theme == "dark" else '#1c2526')
-                ax.set_title(
-                    f'Trajektoria skoku (belka={gate}, kąt wybicia={math.degrees(takeoff_angle_rad):.1f}°, siła wybicia={self.selected_jumper.jump_force} N)',
-                    fontsize=14, color='#cdd6f4' if self.current_theme == "dark" else '#1c2526', pad=15
-                )
-                ax.legend(facecolor='#313244' if self.current_theme == "dark" else '#ffffff', edgecolor='#45475a' if self.current_theme == "dark" else '#d1d5db', fontsize=10, labelcolor='#cdd6f4' if self.current_theme == "dark" else '#1c2526')
-                ax.grid(True, linestyle='--', alpha=0.7)
-                ax.set_facecolor('#313244' if self.current_theme == "dark" else '#ffffff')
-                self.figure.patch.set_facecolor('#1e1e2e' if self.current_theme == "dark" else '#f5f5f5')
-                ax.tick_params(colors='#cdd6f4' if self.current_theme == "dark" else '#1c2526')
-                ax.spines['bottom'].set_color('#cdd6f4' if self.current_theme == "dark" else '#1c2526')
-                ax.spines['top'].set_color('#cdd6f4' if self.current_theme == "dark" else '#1c2526')
-                ax.spines['left'].set_color('#cdd6f4' if self.current_theme == "dark" else '#1c2526')
-                ax.spines['right'].set_color('#cdd6f4' if self.current_theme == "dark" else '#1c2526')
-                return line1, line2
+                return plot_elements
 
             def update(frame):
+                if frame >= max(len(self.positions), len(self.x_landing)):
+                    self.ani.event_source.stop()
+                    # Start zoom-in animation
+                    self.start_zoom_animation(ax, plot_elements)
+                    return plot_elements
                 if frame < len(self.positions):
-                    x, y = zip(*self.positions[:frame+1])
-                    line1.set_data(x, y)
+                    x, y = self.positions[frame]
+                    if skier_icon:
+                        ab.xy = (x, y)
+                    else:
+                        jumper_point.set_data([x], [y])
+                    trail_x = [p[0] for p in self.positions[:frame+1]]
+                    trail_y = [p[1] for p in self.positions[:frame+1]]
+                    trail_line.set_data(trail_x, trail_y)
                 if frame < len(self.x_landing):
-                    line2.set_data(self.x_landing[:frame], self.y_landing[:frame])
-                ax.relim()
-                ax.autoscale_view()
-                return line1, line2
+                    landing_line.set_data(self.x_landing[:frame], self.y_landing[:frame])
+                return plot_elements
 
-            ani = animation.FuncAnimation(self.figure, update, init_func=init, frames=max(len(self.positions), len(self.x_landing)), interval=20, blit=True)
-            self.canvas.draw()
+            try:
+                self.ani = animation.FuncAnimation(self.figure, update, init_func=init, frames=max(len(self.positions), len(self.x_landing)), interval=5, blit=False, repeat=False)
+                self.canvas.draw()
+            except Exception as e:
+                self.result_text.setText(f"BŁĄD: Problem z animacją: {str(e)}")
+                print(f"BŁĄD: Problem z animacją: {str(e)}")
 
         except ValueError as e:
             self.result_text.setText(f"BŁĄD: {str(e)}")
+
+    def start_zoom_animation(self, ax, plot_elements):
+        # Zoom-in animation after main animation
+        final_x, final_y = self.positions[-1]  # Last position of jumper
+        zoom_frames = 10  # Number of zoom frames
+        initial_xlim = (0, Hill.n + 50 + Hill.a_finish + 10)
+        initial_ylim = (min(min(self.y_landing), 0) - 5, Hill.Zu * 1.5 + 5)
+        final_xlim = (final_x - 10, final_x + 10)  # Zoom to ±10m around jumper
+        final_ylim = (final_y - 10, final_y + 10)
+
+        def zoom_update(frame):
+            if frame >= zoom_frames:
+                ax.set_xlim(final_xlim)
+                ax.set_ylim(final_ylim)
+                return plot_elements
+            t = frame / zoom_frames
+            new_xlim = (initial_xlim[0] + t * (final_xlim[0] - initial_xlim[0]), initial_xlim[1] + t * (final_xlim[1] - initial_xlim[1]))
+            new_ylim = (initial_ylim[0] + t * (final_ylim[0] - initial_ylim[0]), initial_ylim[1] + t * (final_ylim[1] - initial_ylim[1]))
+            ax.set_xlim(new_xlim)
+            ax.set_ylim(new_ylim)
+            return plot_elements
+
+        zoom_ani = animation.FuncAnimation(self.figure, zoom_update, frames=zoom_frames + 1, interval=50, blit=False, repeat=False)
+        self.canvas.draw()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

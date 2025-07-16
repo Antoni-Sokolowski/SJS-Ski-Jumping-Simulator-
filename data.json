@@ -60,7 +60,8 @@
       "name": "Kamil",
       "last_name": "Stoch",
       "mass": 60,
-      "height": 1.72
+      "height": 1.72,
+      "jump_force": 1400
     },
     {
       "name": "Stanisław",

@@ -88,15 +88,18 @@ def fly_simulation(Hill, Jumper, gate_number=None, time_contact=0.1):
     max_iterations = 1000000
     iteration = 0
 
-    while current_position_y > Hill.y_landing(current_position_x) + 1:
+    while current_position_y > Hill.y_landing(current_position_x):
         iteration += 1
         total_velocity = math.sqrt(current_velocity_x ** 2 + current_velocity_y ** 2)
         angle_of_flight_rad = math.atan2(current_velocity_y, current_velocity_x)
         force_g_y = -Jumper.mass * GRAVITY
-        force_drag_magnitude = 0.5 * AIR_DENSITY * Jumper.flight_drag_coefficient * Jumper.flight_frontal_area * total_velocity ** 2
+        force_drag_magnitude = 0.5 * AIR_DENSITY * (Jumper.flight_drag_coefficient if current_position_y > Hill.y_landing(current_position_x) + 1
+                                                    else Jumper.landing_drag_coefficient) * (Jumper.flight_frontal_area if current_position_y > Hill.y_landing(current_position_x) + 1
+                                                                                             else Jumper.landing_frontal_area) * total_velocity ** 2
         force_drag_x = -force_drag_magnitude * math.cos(angle_of_flight_rad)
         force_drag_y = -force_drag_magnitude * math.sin(angle_of_flight_rad)
-        force_lift_magnitude = 0.5 * AIR_DENSITY * Jumper.flight_lift_coefficient * Jumper.flight_frontal_area * total_velocity ** 2
+        force_lift_magnitude = 0.5 * AIR_DENSITY * (Jumper.flight_lift_coefficient if current_position_y > Hill.y_landing(current_position_x) + 1
+                                                    else Jumper.landing_lift_coefficient) * Jumper.flight_frontal_area * total_velocity ** 2
         force_lift_x = -force_lift_magnitude * math.sin(angle_of_flight_rad)
         force_lift_y = force_lift_magnitude * math.cos(angle_of_flight_rad)
         acceleration_x = (force_drag_x + force_lift_x) / Jumper.mass
@@ -110,27 +113,6 @@ def fly_simulation(Hill, Jumper, gate_number=None, time_contact=0.1):
             print("Symulacja przerwana: Osiągnięto maksymalną liczbę iteracji")
             return -1
 
-    while current_position_y > Hill.y_landing(current_position_x):
-        iteration += 1
-        total_velocity = math.sqrt(current_velocity_x ** 2 + current_velocity_y ** 2)
-        angle_of_flight_rad = math.atan2(current_velocity_y, current_velocity_x)
-        force_g_y = -Jumper.mass * GRAVITY
-        force_drag_magnitude = 0.5 * AIR_DENSITY * Jumper.landing_drag_coefficient * Jumper.landing_frontal_area * total_velocity ** 2
-        force_drag_x = -force_drag_magnitude * math.cos(angle_of_flight_rad)
-        force_drag_y = -force_drag_magnitude * math.sin(angle_of_flight_rad)
-        force_lift_magnitude = 0.5 * AIR_DENSITY * Jumper.flight_lift_coefficient * Jumper.landing_frontal_area * total_velocity ** 2
-        force_lift_x = -force_lift_magnitude * math.sin(angle_of_flight_rad)
-        force_lift_y = force_lift_magnitude * math.cos(angle_of_flight_rad)
-        acceleration_x = (force_drag_x + force_lift_x) / Jumper.mass
-        acceleration_y = (force_g_y + force_drag_y + force_lift_y) / Jumper.mass
-        current_velocity_x += acceleration_x * time_step
-        current_velocity_y += acceleration_y * time_step
-        current_position_x += current_velocity_x * time_step
-        current_position_y += current_velocity_y * time_step
-        positions.append((current_position_x, current_position_y))
-        if iteration >= max_iterations:
-            print("Symulacja przerwana: Osiągnięto maksymalną liczbę iteracji")
-            return -1
 
     landing_x = current_position_x
     arc_length = 0.0
@@ -192,11 +174,11 @@ def plot_flight_trajectory(Hill, Jumper, gate_number=None, time_contact=0.1):
 
 abc = Zakopane.calculate_landing_parabola_coefficients()
 print(abc)
-speed = inrun_simulation(Zakopane, Kamil,17)
+speed = inrun_simulation(Zakopane, Kamil,34)
 print(f"{round(speed*3.6, 2)} km/h")
 
 
 
-fly_simulation(Zakopane, Kamil, 17)
+fly_simulation(Zakopane, Kamil, 34)
 
-plot_flight_trajectory(Zakopane, Kamil, 17)
+plot_flight_trajectory(Zakopane, Kamil, 34)

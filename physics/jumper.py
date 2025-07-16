@@ -24,9 +24,9 @@ class Jumper:
                  jump_force = 1000,                             # Siła wybicia
 
                  # --- LOT ---
-                 flight_drag_coefficient: float = 0.6,         # Współczynnik oporu aerodynamicznego zawodnika w locie
+                 flight_drag_coefficient: float = 0.6,          # Współczynnik oporu aerodynamicznego zawodnika w locie
                  flight_frontal_area: float = 0.6,              # Powierzchnia czołowa zawodnika w locie
-                 flight_lift_coefficient: float = 0.5,         # Współczynnik siły nośnej zawodnika w locie
+                 flight_lift_coefficient: float = 0.5,          # Współczynnik siły nośnej zawodnika w locie
 
                  # --- LĄDOWANIE ---
                  landing_drag_coefficient: float = 3,           # Współczynnik oporu aerodynamicznego zawodnika podczas lądowania

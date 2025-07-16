@@ -20,16 +20,16 @@ class Jumper:
                  takeoff_drag_coefficient: float = 1,           # Współczynnik oporu aerodynamicznego zawodnika podczas wybicia
                  takeoff_frontal_area: float = 0.7,             # Powierzchnia czołowa zawodnika podczas wybicia
                  takeoff_lift_coefficient: float = 0,           # Współczynnik siły nośnej zawodnika podczas wybicia
-                 takeoff_angle_changer_deg: float = 0,         # Wartość zmiany kątu wybicia zawodnika w stopniach
+                 takeoff_angle_changer_deg: float = 32,         # Wartość zmiany kątu wybicia zawodnika w stopniach
 
                  # --- LOT ---
-                 flight_drag_coefficient: float = 0.95,          # Współczynnik oporu aerodynamicznego zawodnika w locie
-                 flight_frontal_area: float = 0.75,              # Powierzchnia czołowa zawodnika w locie
-                 flight_lift_coefficient: float = 0.5,          # Współczynnik siły nośnej zawodnika w locie
+                 flight_drag_coefficient: float = 0.85,         # Współczynnik oporu aerodynamicznego zawodnika w locie
+                 flight_frontal_area: float = 0.6,              # Powierzchnia czołowa zawodnika w locie
+                 flight_lift_coefficient: float = 0.65,          # Współczynnik siły nośnej zawodnika w locie
 
                  # --- LĄDOWANIE ---
-                 landing_drag_coefficient: float = 0.01,        # Współczynnik oporu aerodynamicznego zawodnika podczas lądowania
-                 landing_frontal_area: float = 0.6,             # Powierzchnia czołowa zawodnika podczas lądowania
+                 landing_drag_coefficient: float = 1,        # Współczynnik oporu aerodynamicznego zawodnika podczas lądowania
+                 landing_frontal_area: float = 0.9,             # Powierzchnia czołowa zawodnika podczas lądowania
                  landing_lift_coefficient: float = 0            # Współczynnik siły nośnej zawodnika podczas lądowania
                  ):
 
@@ -57,4 +57,3 @@ class Jumper:
 
     def __str__(self):
         return f'{self.name} {self.last_name}'
-

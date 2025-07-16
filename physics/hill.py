@@ -21,7 +21,7 @@ class Hill:
                  s: float,                  # Wysokość progu
                  l1: float,                 # Odległość po krzywej od P do K
                  l2: float,                 # Odległość po krzywej od K do L
-                 a_finish: float,                  # Długść od U do końca
+                 a_finish: float,           # Długść od U do końca
                  betaP_deg: float,          # Kąt nachylenia stycznej w punkcie P
                  beta_deg: float,           # Kąt nachylenia stycznej w punkcie K
                  betaL_deg: float,          # Kąt nachylenia stycznej w punkcie L

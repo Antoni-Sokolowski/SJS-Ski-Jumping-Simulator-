@@ -44,9 +44,9 @@ Kamil = Jumper("Kamil",
 
 
 def inrun_simulation(Hill, Jumper):
-    time_step = 0.01
+    time_step = 0.001
     current_velocity = 0
-    distance_to_takeoff1 = 77
+    distance_to_takeoff1 = 97.8
 
     if distance_to_takeoff1 > Hill.e1:
         return 0.0
@@ -70,6 +70,7 @@ def inrun_simulation(Hill, Jumper):
         distance_to_takeoff1 -= current_velocity * time_step
 
     while distance_to_takeoff1 > 0:
+        current_angle = Hill.get_inrun_angle(distance_to_takeoff1)
 
         # Obliczanie sił
         g_force = gravity_force_parallel(Jumper.mass, current_angle)
@@ -100,7 +101,7 @@ def fly_simulation(Hill, Jumper):
 
     initial_total_velocity = inrun_simulation(Hill, Jumper)
 
-    takeoff_angle_rad = Hill.alpha_rad + Jumper.takeoff_angle_changer_rad
+    takeoff_angle_rad = -Hill.alpha_rad + Jumper.takeoff_angle_changer_rad
 
     current_velocity_x = initial_total_velocity * math.cos(takeoff_angle_rad)
     current_velocity_y = initial_total_velocity * math.sin(takeoff_angle_rad)
@@ -112,10 +113,42 @@ def fly_simulation(Hill, Jumper):
     Cl = Jumper.flight_lift_coefficient
     A = Jumper.flight_frontal_area
 
-    time_step = 0.01
+    time_step = 0.001
     max_iterations = 1000000
 
     iteration = 0
+
+    while current_position_y > Hill.y_landing(current_position_x) + 1:
+        iteration += 1
+
+        total_velocity = math.sqrt(current_velocity_x ** 2 + current_velocity_y ** 2)
+        angle_of_flight_rad = math.atan2(current_velocity_y, current_velocity_x)
+
+        force_g_y = -mass * g
+
+        force_drag_magnitude = 0.5 * air_density * Cd * A * total_velocity ** 2
+        force_drag_x = -force_drag_magnitude * math.cos(angle_of_flight_rad)
+        force_drag_y = -force_drag_magnitude * math.sin(angle_of_flight_rad)
+
+        force_lift_magnitude = 0.5 * air_density * Cl * A * total_velocity ** 2
+        force_lift_x = -force_lift_magnitude * math.sin(angle_of_flight_rad)
+        force_lift_y = force_lift_magnitude * math.cos(angle_of_flight_rad)
+
+        acceleration_x = (force_drag_x + force_lift_x) / mass
+        acceleration_y = (force_g_y + force_drag_y + force_lift_y) / mass
+
+        current_velocity_x += acceleration_x * time_step
+        current_velocity_y += acceleration_y * time_step
+
+        current_position_x += current_velocity_x * time_step
+        current_position_y += current_velocity_y * time_step
+
+    g = GRAVITY
+    mass = Jumper.mass
+    air_density = AIR_DENSITY
+    Cd = Jumper.landing_drag_coefficient
+    Cl = Jumper.landing_lift_coefficient
+    A = Jumper.landing_frontal_area
 
     while current_position_y > Hill.y_landing(current_position_x):
         iteration += 1
@@ -179,6 +212,3 @@ def fly_simulation(Hill, Jumper):
     return arc_length
 
 fly_simulation(Zakopane, Kamil)
-
-
-

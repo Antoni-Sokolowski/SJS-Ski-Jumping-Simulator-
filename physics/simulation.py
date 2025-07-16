@@ -176,7 +176,7 @@ def plot_flight_trajectory(Hill, Jumper, gate_number=None, time_contact=0.1):
         current_position_y += current_velocity_y * time_step
         positions.append((current_position_x, current_position_y))
     x, y = zip(*positions)
-    x_landing = np.linspace(0, Hill.L + 50, 100)
+    x_landing = np.linspace(0, Hill.L + 90, 100)
     y_landing = [Hill.y_landing(x) for x in x_landing]
     plt.plot(x, y, 'r-', label='Trajektoria lotu')
     plt.plot(x_landing, y_landing, 'g-', label='Profil lądowania')
@@ -192,11 +192,11 @@ def plot_flight_trajectory(Hill, Jumper, gate_number=None, time_contact=0.1):
 
 abc = Zakopane.calculate_landing_parabola_coefficients()
 print(abc)
-speed = inrun_simulation(Zakopane, Kamil, 1)
+speed = inrun_simulation(Zakopane, Kamil,17)
 print(f"{round(speed*3.6, 2)} km/h")
 
 
 
-fly_simulation(Zakopane, Kamil, 1)
+fly_simulation(Zakopane, Kamil, 17)
 
-plot_flight_trajectory(Zakopane, Kamil, 1)
+plot_flight_trajectory(Zakopane, Kamil, 17)

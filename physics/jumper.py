@@ -20,13 +20,13 @@ class Jumper:
                  takeoff_drag_coefficient: float = 1,           # Współczynnik oporu aerodynamicznego zawodnika podczas wybicia
                  takeoff_frontal_area: float = 0.8,             # Powierzchnia czołowa zawodnika podczas wybicia
                  takeoff_lift_coefficient: float = 0,           # Współczynnik siły nośnej zawodnika podczas wybicia
-                 takeoff_angle_changer_deg: float = 31,         # Wartość zmiany kątu wybicia zawodnika w stopniach
+                 takeoff_angle_changer_deg: float = 15,         # Wartość zmiany kątu wybicia zawodnika w stopniach
                  jump_force = 1000,                             # Siła wybicia
 
                  # --- LOT ---
-                 flight_drag_coefficient: float = 0.88,         # Współczynnik oporu aerodynamicznego zawodnika w locie
+                 flight_drag_coefficient: float = 0.6,         # Współczynnik oporu aerodynamicznego zawodnika w locie
                  flight_frontal_area: float = 0.6,              # Powierzchnia czołowa zawodnika w locie
-                 flight_lift_coefficient: float = 0.55,         # Współczynnik siły nośnej zawodnika w locie
+                 flight_lift_coefficient: float = 0.5,         # Współczynnik siły nośnej zawodnika w locie
 
                  # --- LĄDOWANIE ---
                  landing_drag_coefficient: float = 3,           # Współczynnik oporu aerodynamicznego zawodnika podczas lądowania

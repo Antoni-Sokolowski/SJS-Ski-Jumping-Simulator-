@@ -16,7 +16,6 @@ import numpy as np
 import math
 from PIL import Image, ImageDraw
 from src.simulation import load_data_from_json, inrun_simulation, fly_simulation
-from src.hill import Hill
 
 
 def resource_path(relative_path):

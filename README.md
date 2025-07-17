@@ -89,7 +89,34 @@ This method allows you to view and modify the code.
 
 You can easily add your own jumpers and hills by editing the `data/data.json` file. I'll show you how to do it below.
 
-**Jumpers**
+### Important info: Each value is expressed in base SI units
+
+
+* **Jumpers**
+
+![SJS_screenshot](.Image/Jumper_statistics.png
+
+Here you can see all the statistics you can set for the jumper in SJS. I will explain each one of these below:
+* **name** - First name of the jumper.
+* **last_name** - Last name of the jumper.
+* **nationality** - Nationality of the jumper.
+* **mass** - Weight of the jumper.
+* **height** - Height of the jumper.
+* **inrun_drag_coefficient** - Drag coefficient of the jumper on inrun. Default is 0.46.
+* **inrun_frontal_area** - Frontal area of the jumper on inrun. Default is 0.42.
+* **inrun_lift_coefficient** - Lift coefficient of the jumper on inrun. Default is 0.
+* **takeoff_drag_coefficient** - Drag coefficient of the jumper during takeoff. Default is 1.
+* **takeoff_frontal_area** - Frontal area of the jumper during takeoff. Default is 0.8.
+* **takeoff_lift_coefficient** - Lift coefficient of the jumper during takeoff. Default is 0.
+* **jump_force** - Jump force of the jumper on takeoff. Default is 1000.
+* **flight_drag_coefficient** - Drag coefficient of the jumper during the flight. Default is 0.5.
+* **flight_frontal_area** - Frontal area of the jumper during the flight. Default is 0.85.
+* **landing_drag_coefficient** - Drag coefficient of the jumper during landing. Default is 3.
+* **landing_frontal_area** - Frontal area of the jumper during landing. Default is 1.
+* **landing_lift_coefficient** - Lift coefficient of the jumper during landing. 0
+
+A lot of data, right?
+
 
 
 ---

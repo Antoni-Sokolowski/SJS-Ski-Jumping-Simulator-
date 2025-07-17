@@ -9,7 +9,7 @@ class Jumper:
     def __init__(self,
                  name: str,                                     # Imię
                  last_name: str,                                # Nazwisko
-                 nationality: str = None,                              # Narodowość
+                 nationality: str = None,                       # Narodowość
                  mass: float = 60,                              # Waga
                  height: float = 1.72,                          # Wzrost
 
@@ -27,7 +27,7 @@ class Jumper:
                  # --- LOT ---
                  flight_drag_coefficient: float = 0.5,          # Współczynnik oporu aerodynamicznego zawodnika w locie
                  flight_frontal_area: float = 0.5,              # Powierzchnia czołowa zawodnika w locie
-                 flight_lift_coefficient: float = 0.85,          # Współczynnik siły nośnej zawodnika w locie
+                 flight_lift_coefficient: float = 0.85,         # Współczynnik siły nośnej zawodnika w locie
 
                  # --- LĄDOWANIE ---
                  landing_drag_coefficient: float = 3,           # Współczynnik oporu aerodynamicznego zawodnika podczas lądowania

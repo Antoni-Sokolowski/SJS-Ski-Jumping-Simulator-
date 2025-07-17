@@ -91,15 +91,28 @@
       "last_name": "Stoch",
       "nationality": "Pl",
       "mass": 60,
-      "height": 1.72,
-      "jump_force": 1000
+      "jump_force": 1500
     },
     {
       "name": "Stanisław",
       "last_name": "Marusarz",
+      "nationality": "Pl",
       "mass": 65,
-      "jump_force": 1600,
-      "flight_lift_coefficient": 0.9
+      "jump_force": 1000
+    },
+    {
+      "name": "Valentin",
+      "last_name": "Foubert",
+      "nationality": "Fr",
+      "mass": 58,
+      "jump_force": 1450
+    },
+    {
+      "name": "Vladimir",
+      "last_name": "Zografski",
+      "nationality": "Bg",
+      "mass": 57.5,
+      "jump_force": 1500
     }
   ]
 }

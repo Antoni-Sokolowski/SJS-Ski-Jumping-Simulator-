@@ -1,6 +1,4 @@
-#main.py
-
-'''Główny plik uruchamiający program'''
+'''Główny plik uruchamiający aplikację symulatora skoków narciarskich.'''
 
 import sys
 import os
@@ -14,25 +12,49 @@ from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import matplotlib.animation as animation
-from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import numpy as np
 import math
 from PIL import Image, ImageDraw
 from src.simulation import load_data_from_json, inrun_simulation, fly_simulation
+from src.hill import Hill
+
+
+def resource_path(relative_path):
+    """
+    Zwraca bezwzględną ścieżkę do zasobu. Niezbędne do poprawnego działania
+    zapakowanej aplikacji (.exe), która przechowuje zasoby w tymczasowym folderze.
+    """
+    if getattr(sys, 'frozen', False):  # Sprawdza, czy aplikacja jest "zamrożona" przez PyInstaller
+        base_path = sys._MEIPASS
+    else:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 
 class MainWindow(QMainWindow):
+    """
+    Główne okno aplikacji symulatora skoków narciarskich.
+    Zarządza wszystkimi elementami UI, logiką przełączania stron i stanem aplikacji.
+    """
+
     def __init__(self):
+        """
+        Konstruktor klasy MainWindow. Inicjalizuje całe UI, wczytuje dane
+        i ustawia początkowy stan aplikacji.
+        """
         super().__init__()
         self.setWindowTitle("Ski Jumping Simulator")
 
+        # --- Indeksy stron dla QStackedWidget ---
         self.MAIN_MENU_IDX, self.SIM_TYPE_MENU_IDX, self.SINGLE_JUMP_IDX, self.COMPETITION_IDX, self.DESCRIPTION_IDX, self.SETTINGS_IDX = range(
             6)
 
+        # --- Zmienne stanu aplikacji ---
         self.current_theme = "dark"
         self.contrast_level = 1.0
         self.volume_level = 0.3
 
+        # --- Definicje motywów (Arkusz Stylów QSS) ---
         self.themes = {
             "dark": lambda contrast: f"""
                 QMainWindow, QWidget {{ background-color: #{self.adjust_brightness('1a1a1a', contrast)}; }}
@@ -98,19 +120,22 @@ class MainWindow(QMainWindow):
         }
         self.setStyleSheet(self.themes[self.current_theme](self.contrast_level))
 
+        # --- Konfiguracja odtwarzacza dźwięku ---
         self.player = QMediaPlayer()
         self.audio_output = QAudioOutput()
         self.player.setAudioOutput(self.audio_output)
-        sound_file = os.path.abspath("assets/click.wav")
+        sound_file = resource_path(os.path.join("assets", "click.wav"))
         self.sound_loaded = os.path.exists(sound_file)
         if self.sound_loaded:
             self.player.setSource(QUrl.fromLocalFile(sound_file))
             self.audio_output.setVolume(self.volume_level)
 
+        # --- Wczytywanie i sortowanie danych ---
         self.all_hills, self.all_jumpers = load_data_from_json()
         self.all_jumpers.sort(key=lambda jumper: str(jumper))
         self.all_hills.sort(key=lambda hill: str(hill))
 
+        # --- Główna struktura layoutu ---
         main_container = QWidget()
         main_layout = QVBoxLayout(main_container)
         main_layout.setContentsMargins(0, 0, 0, 0)
@@ -124,12 +149,14 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self.author_label, 0, Qt.AlignRight | Qt.AlignBottom)
         self.setCentralWidget(main_container)
 
+        # --- Inicjalizacja zmiennych stanu symulacji ---
         self.selection_order = []
         self.competition_results = []
         self.current_jumper_index = 0
         self.current_round = 1
         self.selected_jumper, self.selected_hill, self.ani = None, None, None
 
+        # --- Tworzenie wszystkich stron interfejsu ---
         self._create_main_menu()
         self._create_sim_type_menu()
         self._create_single_jump_page()
@@ -138,6 +165,7 @@ class MainWindow(QMainWindow):
         self._create_settings_page()
 
     def _create_main_menu(self):
+        """Tworzy i konfiguruje stronę menu głównego."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setAlignment(Qt.AlignCenter)
@@ -163,6 +191,7 @@ class MainWindow(QMainWindow):
         self.central_widget.addWidget(widget)
 
     def _create_sim_type_menu(self):
+        """Tworzy stronę wyboru trybu symulacji (pojedynczy skok / zawody)."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(50, 20, 50, 50)
@@ -180,6 +209,7 @@ class MainWindow(QMainWindow):
         self.central_widget.addWidget(widget)
 
     def _create_single_jump_page(self):
+        """Tworzy stronę symulacji pojedynczego skoku."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setSpacing(20)
@@ -219,6 +249,7 @@ class MainWindow(QMainWindow):
         self.central_widget.addWidget(widget)
 
     def _create_competition_page(self):
+        """Tworzy stronę symulacji zawodów."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setSpacing(20)
@@ -226,6 +257,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(self._create_top_bar("Zawody", self.SIM_TYPE_MENU_IDX))
         main_hbox = QHBoxLayout()
         options_vbox = QVBoxLayout()
+
         sort_layout = QHBoxLayout()
         sort_layout.addWidget(QLabel("Sortuj:"))
         self.sort_combo = QComboBox()
@@ -233,6 +265,7 @@ class MainWindow(QMainWindow):
         self.sort_combo.currentTextChanged.connect(self._sort_jumper_list)
         sort_layout.addWidget(self.sort_combo)
         options_vbox.addLayout(sort_layout)
+
         self.jumper_list_widget = QListWidget()
         for jumper in self.all_jumpers:
             item = QListWidgetItem(self.create_rounded_flag_icon(jumper.nationality), str(jumper))
@@ -242,21 +275,25 @@ class MainWindow(QMainWindow):
             self.jumper_list_widget.addItem(item)
         self.jumper_list_widget.itemChanged.connect(self._on_jumper_item_changed)
         options_vbox.addWidget(self.jumper_list_widget)
+
         self.comp_hill_combo = QComboBox()
         self.comp_hill_combo.addItem("Wybierz skocznię")
         for hill in self.all_hills:
             self.comp_hill_combo.addItem(self.create_rounded_flag_icon(hill.country), str(hill))
         self.comp_hill_combo.currentIndexChanged.connect(self.update_competition_hill)
         options_vbox.addLayout(self._create_form_row("2. Skocznia:", self.comp_hill_combo))
+
         self.comp_gate_spin = QSpinBox()
         self.comp_gate_spin.setMinimum(1)
         self.comp_gate_spin.setMaximum(1)
         options_vbox.addLayout(self._create_form_row("3. Belka:", self.comp_gate_spin))
+
         run_comp_btn = QPushButton("Rozpocznij zawody")
         run_comp_btn.clicked.connect(self.run_competition)
         options_vbox.addWidget(run_comp_btn)
         options_vbox.addStretch()
         main_hbox.addLayout(options_vbox, 1)
+
         results_vbox = QVBoxLayout()
         self.competition_status_label = QLabel("Tabela wyników:")
         results_vbox.addWidget(self.competition_status_label)
@@ -272,10 +309,12 @@ class MainWindow(QMainWindow):
         self.results_table.setEditTriggers(QTableWidget.NoEditTriggers)
         results_vbox.addWidget(self.results_table)
         main_hbox.addLayout(results_vbox, 2)
+
         layout.addLayout(main_hbox)
         self.central_widget.addWidget(widget)
 
     def _create_description_page(self):
+        """Tworzy stronę z opisem projektu."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setSpacing(40)
@@ -289,6 +328,7 @@ class MainWindow(QMainWindow):
         self.central_widget.addWidget(widget)
 
     def _create_settings_page(self):
+        """Tworzy stronę ustawień aplikacji (motyw, kontrast, głośność)."""
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setSpacing(40)
@@ -312,6 +352,7 @@ class MainWindow(QMainWindow):
         self.central_widget.addWidget(widget)
 
     def _create_top_bar(self, title_text, back_index):
+        """Tworzy reużywalny górny pasek z przyciskiem powrotu i tytułem strony."""
         top_bar = QHBoxLayout()
         btn = QPushButton("←")
         btn.clicked.connect(lambda: [self.play_sound(), self.central_widget.setCurrentIndex(back_index)])
@@ -328,12 +369,14 @@ class MainWindow(QMainWindow):
         return top_bar
 
     def _create_form_row(self, label_text, widget):
+        """Tworzy reużywalny wiersz formularza (etykieta + widget)."""
         row = QHBoxLayout()
         row.addWidget(QLabel(label_text))
         row.addWidget(widget)
         return row
 
     def _on_jumper_item_changed(self, item):
+        """Obsługuje zmianę zaznaczenia na liście zawodników do zawodów."""
         jumper = item.data(Qt.UserRole)
         if item.checkState() == Qt.Checked:
             if jumper not in self.selection_order:
@@ -343,6 +386,7 @@ class MainWindow(QMainWindow):
                 self.selection_order.remove(jumper)
 
     def _sort_jumper_list(self, sort_text):
+        """Sortuje listę zawodników w trybie zawodów wg wybranego kryterium."""
         items_data = []
         for i in range(self.jumper_list_widget.count()):
             item = self.jumper_list_widget.item(i)
@@ -368,6 +412,7 @@ class MainWindow(QMainWindow):
         self.jumper_list_widget.itemChanged.connect(self._on_jumper_item_changed)
 
     def play_sound(self):
+        """Odtwarza dźwięk kliknięcia, jeśli plik jest załadowany."""
         if hasattr(self, 'sound_loaded') and self.sound_loaded:
             if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
                 self.player.setPosition(0)
@@ -375,26 +420,31 @@ class MainWindow(QMainWindow):
                 self.player.play()
 
     def adjust_brightness(self, hex_color, contrast):
+        """Pomocnicza funkcja do zmiany jasności koloru w motywach."""
         hex_color = hex_color.lstrip('#')
         rgb = tuple(int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
         rgb = [min(max(int(c * contrast), 0), 255) for c in rgb]
         return f"{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
 
     def update_jumper(self):
+        """Aktualizuje wybranego zawodnika w trybie pojedynczego skoku."""
         self.selected_jumper = self.all_jumpers[
             self.jumper_combo.currentIndex() - 1] if self.jumper_combo.currentIndex() > 0 else None
 
     def update_hill(self):
+        """Aktualizuje wybraną skocznię w trybie pojedynczego skoku."""
         self.selected_hill = self.all_hills[
             self.hill_combo.currentIndex() - 1] if self.hill_combo.currentIndex() > 0 else None
         if self.selected_hill: self.gate_spin.setMaximum(self.selected_hill.gates)
 
     def update_competition_hill(self):
+        """Aktualizuje wybraną skocznię w trybie zawodów."""
         hill = self.all_hills[
             self.comp_hill_combo.currentIndex() - 1] if self.comp_hill_combo.currentIndex() > 0 else None
         if hill: self.comp_gate_spin.setMaximum(hill.gates)
 
     def clear_results(self):
+        """Czyści wyniki i resetuje pola w trybie pojedynczego skoku."""
         self.jumper_combo.setCurrentIndex(0)
         self.hill_combo.setCurrentIndex(0)
         self.gate_spin.setValue(1)
@@ -407,18 +457,22 @@ class MainWindow(QMainWindow):
             self.ani = None
 
     def change_theme(self, theme):
+        """Aktualizuje motyw aplikacji."""
         self.current_theme = "dark" if theme == "Ciemny" else "light"
         self.update_styles()
 
     def change_contrast(self):
+        """Aktualizuje kontrast aplikacji."""
         self.contrast_level = self.contrast_slider.value() / 100.0
         self.update_styles()
 
     def change_volume(self):
+        """Aktualizuje poziom głośności."""
         self.volume_level = self.volume_slider.value() / 100.0
         if hasattr(self, 'sound_loaded') and self.sound_loaded: self.audio_output.setVolume(self.volume_level)
 
     def update_styles(self):
+        """Aplikuje zmiany stylów (motyw/kontrast) do całej aplikacji."""
         self.setStyleSheet(self.themes[self.current_theme](self.contrast_level))
         if hasattr(self, 'figure'):
             self.figure.set_facecolor(
@@ -426,8 +480,9 @@ class MainWindow(QMainWindow):
             if hasattr(self, 'canvas'): self.canvas.draw()
 
     def _create_rounded_flag_pixmap(self, country_code, size=QSize(48, 33), radius=8):
+        """Tworzy obrazek QPixmap flagi z zaokrąglonymi rogami."""
         if not country_code: return QPixmap()
-        flag_path = os.path.join("assets", "flags", f"{country_code}.png")
+        flag_path = resource_path(os.path.join("assets", "flags", f"{country_code}.png"))
         if not os.path.exists(flag_path): return QPixmap()
         try:
             with Image.open(flag_path) as img:
@@ -444,12 +499,14 @@ class MainWindow(QMainWindow):
             return QPixmap()
 
     def create_rounded_flag_icon(self, country_code, radius=6):
+        """Tworzy ikonę QIcon flagi z zaokrąglonymi rogami."""
         pixmap = self._create_rounded_flag_pixmap(country_code, size=QSize(32, 22), radius=radius)
         if pixmap.isNull():
             return QIcon()
         return QIcon(pixmap)
 
     def run_competition(self):
+        """Uruchamia logikę symulacji zawodów."""
         self.play_sound()
         hill_idx = self.comp_hill_combo.currentIndex()
         if hill_idx == 0 or not self.selection_order:
@@ -475,14 +532,12 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(500, self._process_next_jumper)
 
     def _process_next_jumper(self):
+        """Przetwarza skok pojedynczego zawodnika w pętli QTimer."""
         if self.current_jumper_index >= len(self.competition_order):
             if self.current_round == 1:
                 self.competition_status_label.setText("Koniec 1. serii. Rozpoczynanie 2. serii...")
                 self.current_round = 2
-
-                # Sortowanie po odległości w 1. serii
                 self.competition_results.sort(key=lambda x: x["d1"], reverse=True)
-
                 finalists = self.competition_results[:30]
                 finalists.reverse()
                 self.competition_order = [res["jumper"] for res in finalists]
@@ -512,6 +567,7 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(150, self._process_next_jumper)
 
     def _update_competition_table(self):
+        """Odświeża tabelę wyników na podstawie aktualnych danych."""
         self.results_table.setRowCount(len(self.competition_results))
         for i, res in enumerate(self.competition_results):
             jumper = res["jumper"]
@@ -533,6 +589,7 @@ class MainWindow(QMainWindow):
         QApplication.processEvents()
 
     def run_simulation(self):
+        """Uruchamia symulację i animację dla pojedynczego skoku."""
         self.play_sound()
         if not self.selected_jumper or not self.selected_hill:
             self.result_text.setText("BŁĄD: Musisz wybrać zawodnika i skocznię!")
@@ -543,6 +600,7 @@ class MainWindow(QMainWindow):
             distance = fly_simulation(self.selected_hill, self.selected_jumper, gate)
             self.result_text.setText(
                 f"Prędkość na progu: {round(3.6 * inrun_velocity, 2)} km/h\nOdległość: {distance:.2f} m")
+
             self.positions = [(0, 0)]
             current_position_x, current_position_y = 0, 0
             initial_total_velocity = inrun_simulation(self.selected_hill, self.selected_jumper, gate_number=gate)
@@ -587,6 +645,7 @@ class MainWindow(QMainWindow):
                 self.positions.append((current_position_x, current_position_y))
             self.x_landing = np.linspace(0, min(current_position_x + 50, max_hill_length), 100)
             self.y_landing = [self.selected_hill.y_landing(x_val) for x_val in self.x_landing]
+
             self.figure.clear()
             ax = self.figure.add_subplot(111)
             ax.set_facecolor(
@@ -602,24 +661,11 @@ class MainWindow(QMainWindow):
             max_y_inrun = y_inrun[0] if len(y_inrun) > 0 else 0
             ax.set_xlim(-inrun_length_to_show - 5, max_hill_length + 10)
             ax.set_ylim(min(min(self.y_landing), 0) - 5, max(max_height * 1.5, max_y_inrun) + 5)
-            skier_icon = None
-            if os.path.exists("skier.png"):
-                try:
-                    skier_img = Image.open("skier.png").resize((20, 20))
-                    skier_icon = OffsetImage(skier_img, zoom=1)
-                except Exception as e:
-                    self.result_text.append(f"\nBŁĄD: Nie udało się załadować 'skier.png': {str(e)}.")
 
-            if skier_icon:
-                ab = AnnotationBbox(skier_icon, (0, 0), frameon=False)
-                ax.add_artist(ab)
-                plot_elements = [ab]
-            else:
-                jumper_point, = ax.plot([], [], 'ro', markersize=8)
-                plot_elements = [jumper_point]
+            jumper_point, = ax.plot([], [], 'ro', markersize=8)
             trail_line, = ax.plot([], [], color='#4da8ff', linewidth=2, alpha=0.5)
             landing_line, = ax.plot([], [], color='#00aaff', linewidth=3)
-            plot_elements.extend([trail_line, landing_line])
+            plot_elements = [jumper_point, trail_line, landing_line]
 
             def init():
                 for element in plot_elements:
@@ -634,10 +680,7 @@ class MainWindow(QMainWindow):
                     return plot_elements
                 if frame < len(self.positions):
                     x, y = self.positions[frame]
-                    if skier_icon:
-                        ab.xy = (x, y)
-                    else:
-                        jumper_point.set_data([x], [y])
+                    jumper_point.set_data([x], [y])
                     trail_line.set_data([p[0] for p in self.positions[:frame + 1]],
                                         [p[1] for p in self.positions[:frame + 1]])
                 if frame < len(self.x_landing):
@@ -652,6 +695,7 @@ class MainWindow(QMainWindow):
             self.result_text.setText(f"BŁĄD: {str(e)}")
 
     def start_zoom_animation(self, ax, plot_elements):
+        """Uruchamia animację przybliżenia na miejsce lądowania."""
         if not self.positions: return
         final_x, final_y = self.positions[-1]
         zoom_frames = 10

@@ -1,4 +1,4 @@
-# simulation.py
+#src/simulation.py
 
 '''Logika symulacji'''
 
@@ -7,7 +7,6 @@ from pathlib import Path
 from utils.constants import GRAVITY, AIR_DENSITY
 import math
 import numpy as np
-import scipy.optimize as so
 import matplotlib.pyplot as plt
 from src.hill import Hill
 from src.jumper import Jumper
@@ -18,20 +17,17 @@ def load_data_from_json(filename='data.json'):
     """
     Wczytuje dane z pliku JSON z głównego folderu projektu.
     """
-    # 1. Znajdź ścieżkę do folderu, w którym jest plik .py (czyli .../physics)
+
     script_dir = Path(__file__).parent
 
-    # 2. Wyjdź o jeden poziom wyżej do głównego folderu projektu (.../SJS_Simulator)
     project_dir = script_dir.parent
 
-    # 3. Połącz ścieżkę do głównego folderu z nazwą pliku
     filepath = project_dir / "assets" / filename
 
 
     with open(filepath, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
-    # ... reszta kodu do tworzenia obiektów ...
     hills = [Hill(**h) for h in data['hills']]
     jumpers = [Jumper(**j) for j in data['jumpers']]
 

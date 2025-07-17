@@ -1,3 +1,5 @@
+#utils/helpers.py
+
 '''Funkcje pomocnicze'''
 
 import math

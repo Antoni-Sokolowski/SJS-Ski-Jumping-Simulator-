@@ -1,3 +1,5 @@
+#utils/constants.py
+
 '''Stałe fizyczne'''
 
 # Przyspieszenie ziemskie [m/s^2]

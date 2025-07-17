@@ -1,4 +1,7 @@
+#src/hill.py
+
 '''Klasa skocznia'''
+
 # Nazewnictwo według nomenklatury FIS
 # https://assets.fis-ski.com/f/252177/5ba64e29f2/construction-norm-2018-2.pdf
 
@@ -7,6 +10,9 @@ import numpy as np
 import scipy.optimize as so
 
 class Hill:
+
+    '''Wprowadzamy atrybuty skoczni'''
+
     def __init__(self,
                  name: str,                 # Nazwa skoczni
                  country: str,              # Kraj
@@ -94,9 +100,12 @@ class Hill:
         # Oblicz współczynniki parabol
         self.calculate_landing_parabola_coefficients()
 
+
     def get_inrun_angle(self,
                         distance_from_takeoff: float  # Odległość po krzywej od progu (T) w górę rozbiegu
                         ) -> float:
+
+        '''Funkcja zwracająca kąt nachylenia najazdu w dowolnym jego miejscu'''
 
         if distance_from_takeoff <= self.t:
             return self.alpha_rad
@@ -116,6 +125,9 @@ class Hill:
             return 0.0
 
     def calculate_landing_profile(self, v, segment='polynomial1'):
+
+        '''Funkcja, która tworzy nasz zeskok'''
+
         if segment == 'polynomial1':
             # Punkty dla pierwszej krzywej: (0, -s), (x_F, y_F), (n, -h), nachylenie w x=n
             O_coord_x = 0.0
@@ -149,6 +161,9 @@ class Hill:
             return R
 
     def calculate_landing_parabola_coefficients(self):
+
+        '''Funkcja, która oblicza współczynniki krzywych, tworzących zeskok'''
+
         # Obliczanie współczynników pierwszej krzywej (polinom 3. stopnia)
         coeffs1 = so.fsolve(self.calculate_landing_profile, np.array([0, 0, 0, 0]), args=('polynomial1',))
         self.a_landing1 = coeffs1[0]
@@ -165,6 +180,9 @@ class Hill:
         return {'polynomial1': coeffs1, 'parabola2': coeffs2}
 
     def y_landing(self, x: float) -> float:
+
+        '''Funkcja, która zwraca wysokość zeskoku w danym miejscu'''
+
         # Ograniczenie dziedziny
         if not (0 <= x <= self.n + self.a_finish + 50):
             raise ValueError(f"Wartość x={x} poza dziedziną [0, {self.n + self.a_finish + 50}]")

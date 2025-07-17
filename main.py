@@ -1,3 +1,7 @@
+#main.py
+
+'''Główny plik uruchamiający program'''
+
 import sys
 import os
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -9,22 +13,18 @@ from PySide6.QtGui import QIcon, QPixmap, QImage
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import numpy as np
 import math
 from PIL import Image, ImageDraw
-import scipy.io.wavfile as wavfile
 from src.simulation import load_data_from_json, inrun_simulation, fly_simulation
-from src.hill import Hill
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Ski Jumping Simulator")
-        self.showMaximized()
 
         self.MAIN_MENU_IDX, self.SIM_TYPE_MENU_IDX, self.SINGLE_JUMP_IDX, self.COMPETITION_IDX, self.DESCRIPTION_IDX, self.SETTINGS_IDX = range(
             6)
@@ -609,8 +609,7 @@ class MainWindow(QMainWindow):
                     skier_icon = OffsetImage(skier_img, zoom=1)
                 except Exception as e:
                     self.result_text.append(f"\nBŁĄD: Nie udało się załadować 'skier.png': {str(e)}.")
-            else:
-                self.result_text.append("\nBŁĄD: Plik 'skier.png' nie znaleziony! Używam kropki.")
+
             if skier_icon:
                 ab = AnnotationBbox(skier_icon, (0, 0), frameon=False)
                 ax.add_artist(ab)

@@ -1,10 +1,11 @@
-# jumper.py
+#src/jumper.py
 
 '''Klasa skoczek'''
 
-import math
-
 class Jumper:
+
+    '''Wprowadzamy atrybuty skoczka'''
+
     def __init__(self,
                  name: str,                                     # Imię
                  last_name: str,                                # Nazwisko

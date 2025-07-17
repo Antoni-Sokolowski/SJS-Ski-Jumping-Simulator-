@@ -19,7 +19,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Ski Jumping Simulator")
-        self.setGeometry(100, 100, 1000, 750)
+        self.showMaximized()  # Open in full screen
 
         # Theme, contrast, and volume state
         self.current_theme = "dark"
@@ -43,6 +43,14 @@ class MainWindow(QMainWindow):
                     border-radius: 5px;
                     font-size: 16px;
                 }}
+                QComboBox QAbstractItemView::item {{
+                    color: #{self.adjust_brightness('ffffff', contrast)};
+                    background-color: #{self.adjust_brightness('2a2a2a', contrast)};
+                }}
+                QComboBox QAbstractItemView::item:selected {{
+                    background-color: #{self.adjust_brightness('005ea6', contrast)};
+                    color: #{self.adjust_brightness('ffffff', contrast)};
+                }}
                 QComboBox::drop-down, QSpinBox::up-button, QSpinBox::down-button {{
                     border: none;
                 }}
@@ -59,7 +67,7 @@ class MainWindow(QMainWindow):
                     border: none;
                     padding: 15px;
                     border-radius: 5px;
-                    font-size: 18px;
+                    font-size: 20px;
                     font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
                 }}
                 QPushButton:hover {{
@@ -70,7 +78,7 @@ class MainWindow(QMainWindow):
                 }}
                 QLabel#authorLabel {{
                     color: #{self.adjust_brightness('b0b0b0', contrast)};
-                    font-size: 12px;
+                    font-size: 14px;
                     font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
                 }}
             """,
@@ -91,6 +99,14 @@ class MainWindow(QMainWindow):
                     border-radius: 5px;
                     font-size: 16px;
                 }}
+                QComboBox QAbstractItemView::item {{
+                    color: #{self.adjust_brightness('1a1a1a', contrast)};
+                    background-color: #{self.adjust_brightness('ffffff', contrast)};
+                }}
+                QComboBox QAbstractItemView::item:selected {{
+                    background-color: #{self.adjust_brightness('005ea6', contrast)};
+                    color: #{self.adjust_brightness('ffffff', contrast)};
+                }}
                 QComboBox::drop-down, QSpinBox::up-button, QSpinBox::down-button {{
                     border: none;
                 }}
@@ -107,7 +123,7 @@ class MainWindow(QMainWindow):
                     border: none;
                     padding: 15px;
                     border-radius: 5px;
-                    font-size: 18px;
+                    font-size: 20px;
                     font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
                 }}
                 QPushButton:hover {{
@@ -118,7 +134,7 @@ class MainWindow(QMainWindow):
                 }}
                 QLabel#authorLabel {{
                     color: #{self.adjust_brightness('404040', contrast)};
-                    font-size: 12px;
+                    font-size: 14px;
                     font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
                 }}
             """
@@ -132,7 +148,7 @@ class MainWindow(QMainWindow):
         sound_file = os.path.abspath("assets/click.wav")
         if not os.path.exists(sound_file):
             print(f"BŁĄD: Plik '{sound_file}' nie znaleziony!")
-            self.result_text = QTextEdit()  # Initialize early for error message
+            self.result_text = QTextEdit()
             self.result_text.setText("BŁĄD: Plik 'click.wav' nie znaleziony! Umieść poprawny plik WAV w folderze projektu.")
             self.sound_loaded = False
         else:
@@ -162,11 +178,11 @@ class MainWindow(QMainWindow):
         main_menu_widget = QWidget()
         main_menu_layout = QVBoxLayout(main_menu_widget)
         main_menu_layout.setAlignment(Qt.AlignCenter)
-        main_menu_layout.setSpacing(35)
-        main_menu_layout.setContentsMargins(20, 20, 20, 20)
+        main_menu_layout.setSpacing(50)
+        main_menu_layout.setContentsMargins(50, 50, 50, 50)
 
         title_label = QLabel("Ski Jumping Simulator")
-        title_label.setStyleSheet(f"font-size: 28px; font-weight: bold; color: {'#0078d4'};")
+        title_label.setStyleSheet(f"font-size: 32px; font-weight: bold; color: {'#0078d4'};")
         main_menu_layout.addWidget(title_label)
 
         simulation_button = QPushButton("Symulacja")
@@ -194,11 +210,11 @@ class MainWindow(QMainWindow):
         # Simulation screen
         simulation_widget = QWidget()
         simulation_layout = QVBoxLayout(simulation_widget)
-        simulation_layout.setSpacing(25)
-        simulation_layout.setContentsMargins(20, 20, 20, 20)
+        simulation_layout.setSpacing(40)
+        simulation_layout.setContentsMargins(50, 50, 50, 50)
 
         sim_header_label = QLabel("Symulacja skoku")
-        sim_header_label.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {'#0078d4'};")
+        sim_header_label.setStyleSheet(f"font-size: 32px; font-weight: bold; color: {'#0078d4'};")
         sim_header_label.setAlignment(Qt.AlignCenter)
         simulation_layout.addWidget(sim_header_label)
 
@@ -254,7 +270,7 @@ class MainWindow(QMainWindow):
         # Result display
         self.result_text = QTextEdit() if not hasattr(self, 'result_text') else self.result_text
         self.result_text.setReadOnly(True)
-        self.result_text.setFixedHeight(70)
+        self.result_text.setFixedHeight(80)
         simulation_layout.addWidget(self.result_text)
 
         # Matplotlib canvas
@@ -271,11 +287,11 @@ class MainWindow(QMainWindow):
         # Description screen
         description_widget = QWidget()
         description_layout = QVBoxLayout(description_widget)
-        description_layout.setSpacing(25)
-        description_layout.setContentsMargins(20, 20, 20, 20)
+        description_layout.setSpacing(40)
+        description_layout.setContentsMargins(50, 50, 50, 50)
 
         desc_header_label = QLabel("Opis Projektu")
-        desc_header_label.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {'#0078d4'};")
+        desc_header_label.setStyleSheet(f"font-size: 32px; font-weight: bold; color: {'#0078d4'};")
         desc_header_label.setAlignment(Qt.AlignCenter)
         description_layout.addWidget(desc_header_label)
 
@@ -298,11 +314,11 @@ class MainWindow(QMainWindow):
         settings_widget = QWidget()
         settings_layout = QVBoxLayout(settings_widget)
         settings_layout.setAlignment(Qt.AlignCenter)
-        settings_layout.setSpacing(25)
-        settings_layout.setContentsMargins(20, 20, 20, 20)
+        settings_layout.setSpacing(40)
+        settings_layout.setContentsMargins(50, 50, 50, 50)
 
         settings_header = QLabel("Ustawienia")
-        settings_header.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {'#0078d4'};")
+        settings_header.setStyleSheet(f"font-size: 32px; font-weight: bold; color: {'#0078d4'};")
         settings_layout.addWidget(settings_header)
 
         theme_layout = QHBoxLayout()
@@ -418,7 +434,7 @@ class MainWindow(QMainWindow):
             widget = self.central_widget.widget(i)
             for label in widget.findChildren(QLabel):
                 if "Ski Jumping Simulator" in label.text() or "Symulacja skoku" in label.text() or "Ustawienia" in label.text() or "Opis Projektu" in label.text():
-                    label.setStyleSheet(f"font-size: 24px; font-weight: bold; color: {title_color};")
+                    label.setStyleSheet(f"font-size: 32px; font-weight: bold; color: {title_color};")
         self.figure.set_facecolor(f"#{self.adjust_brightness('1a1a1a' if self.current_theme == 'dark' else 'f0f0f0', self.contrast_level)}")
         self.canvas.draw()
 
@@ -478,7 +494,7 @@ class MainWindow(QMainWindow):
                     self.result_text.append("\nUWAGA: Skok przekroczył maksymalną długość skoczni!")
                     break
                 self.positions.append((current_position_x, current_position_y))
-            self.x_landing = np.linspace(0, min(current_position_x + 50, max_hill_length), 100)  # Reduced points
+            self.x_landing = np.linspace(0, min(current_position_x + 50, max_hill_length), 100)
             self.y_landing = [self.selected_hill.y_landing(x_val) for x_val in self.x_landing]
 
             # Animate minimalist ski jump with fixed view and adjusted scale
@@ -486,10 +502,10 @@ class MainWindow(QMainWindow):
             ax = self.figure.add_subplot(111)
             ax.set_facecolor(f"#{self.adjust_brightness('1a1a1a' if self.current_theme == 'dark' else 'f0f0f0', self.contrast_level)}")
             self.figure.patch.set_facecolor(f"#{self.adjust_brightness('1a1a1a' if self.current_theme == 'dark' else 'f0f0f0', self.contrast_level)}")
-            ax.axis('off')  # Remove axes for minimalist look
-            ax.set_xlim(0, max_hill_length + 10)  # Margin for visibility
-            ax.set_ylim(min(min(self.y_landing), 0) - 5, max_height * 1.5 + 5)  # Adjusted Y scale for steeper look
-            ax.set_aspect('auto')  # Allow non-equal scaling for realistic proportions
+            ax.axis('off')
+            ax.set_xlim(0, max_hill_length + 10)
+            ax.set_ylim(min(min(self.y_landing), 0) - 5, max_height * 1.5 + 5)
+            ax.set_aspect('auto')
 
             # Load skier icon
             skier_icon = None
@@ -511,8 +527,8 @@ class MainWindow(QMainWindow):
             else:
                 jumper_point, = ax.plot([], [], 'ro', markersize=8)
                 plot_elements = [jumper_point]
-            trail_line, = ax.plot([], [], color='#4da8ff', linewidth=2, alpha=0.5)  # Trail
-            landing_line, = ax.plot([], [], color='#00aaff', linewidth=3)  # Landing profile
+            trail_line, = ax.plot([], [], color='#4da8ff', linewidth=2, alpha=0.5)
+            landing_line, = ax.plot([], [], color='#00aaff', linewidth=3)
             plot_elements.extend([trail_line, landing_line])
 
             def init():
@@ -521,7 +537,6 @@ class MainWindow(QMainWindow):
             def update(frame):
                 if frame >= max(len(self.positions), len(self.x_landing)):
                     self.ani.event_source.stop()
-                    # Start zoom-in animation
                     self.start_zoom_animation(ax, plot_elements)
                     return plot_elements
                 if frame < len(self.positions):
@@ -548,12 +563,11 @@ class MainWindow(QMainWindow):
             self.result_text.setText(f"BŁĄD: {str(e)}")
 
     def start_zoom_animation(self, ax, plot_elements):
-        # Zoom-in animation after main animation
-        final_x, final_y = self.positions[-1]  # Last position of jumper
-        zoom_frames = 10  # Number of zoom frames
-        initial_xlim = (0, Hill.n + 50 + Hill.a_finish + 10)
+        final_x, final_y = self.positions[-1]
+        zoom_frames = 10
+        initial_xlim = (0, self.selected_hill.n + self.selected_hill.a_finish + 10)
         initial_ylim = (min(min(self.y_landing), 0) - 5, Hill.Zu * 1.5 + 5)
-        final_xlim = (final_x - 10, final_x + 10)  # Zoom to ±10m around jumper
+        final_xlim = (final_x - 10, final_x + 10)
         final_ylim = (final_y - 10, final_y + 10)
 
         def zoom_update(frame):

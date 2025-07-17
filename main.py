@@ -98,7 +98,6 @@ class MainWindow(QMainWindow):
         }
         self.setStyleSheet(self.themes[self.current_theme](self.contrast_level))
 
-        # Przywrócenie logiki dźwięku
         self.player = QMediaPlayer()
         self.audio_output = QAudioOutput()
         self.player.setAudioOutput(self.audio_output)
@@ -108,12 +107,10 @@ class MainWindow(QMainWindow):
             self.player.setSource(QUrl.fromLocalFile(sound_file))
             self.audio_output.setVolume(self.volume_level)
 
-        # Inicjalizacja danych
         self.all_hills, self.all_jumpers = load_data_from_json()
         self.all_jumpers.sort(key=lambda jumper: str(jumper))
         self.all_hills.sort(key=lambda hill: str(hill))
 
-        # Główny kontener i layout
         main_container = QWidget()
         main_layout = QVBoxLayout(main_container)
         main_layout.setContentsMargins(0, 0, 0, 0)
@@ -127,14 +124,12 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self.author_label, 0, Qt.AlignRight | Qt.AlignBottom)
         self.setCentralWidget(main_container)
 
-        # Zmienne stanu
         self.selection_order = []
         self.competition_results = []
         self.current_jumper_index = 0
         self.current_round = 1
         self.selected_jumper, self.selected_hill, self.ani = None, None, None
 
-        # Tworzenie stron
         self._create_main_menu()
         self._create_sim_type_menu()
         self._create_single_jump_page()
@@ -162,7 +157,7 @@ class MainWindow(QMainWindow):
             lambda: [self.play_sound(), self.central_widget.setCurrentIndex(self.SETTINGS_IDX)])
         layout.addWidget(btn_settings)
         btn_exit = QPushButton("Wyjdź")
-        btn_exit.clicked.connect(self.close)
+        btn_exit.clicked.connect(lambda: [self.play_sound(), self.close()])
         layout.addWidget(btn_exit)
         layout.addStretch()
         self.central_widget.addWidget(widget)
@@ -231,7 +226,13 @@ class MainWindow(QMainWindow):
         layout.addLayout(self._create_top_bar("Zawody", self.SIM_TYPE_MENU_IDX))
         main_hbox = QHBoxLayout()
         options_vbox = QVBoxLayout()
-        options_vbox.addWidget(QLabel("1. Wybierz zawodników (w kolejności startowej):"))
+        sort_layout = QHBoxLayout()
+        sort_layout.addWidget(QLabel("Sortuj:"))
+        self.sort_combo = QComboBox()
+        self.sort_combo.addItems(["Wg Nazwiska (A-Z)", "Wg Kraju"])
+        self.sort_combo.currentTextChanged.connect(self._sort_jumper_list)
+        sort_layout.addWidget(self.sort_combo)
+        options_vbox.addLayout(sort_layout)
         self.jumper_list_widget = QListWidget()
         for jumper in self.all_jumpers:
             item = QListWidgetItem(self.create_rounded_flag_icon(jumper.nationality), str(jumper))
@@ -260,9 +261,8 @@ class MainWindow(QMainWindow):
         self.competition_status_label = QLabel("Tabela wyników:")
         results_vbox.addWidget(self.competition_status_label)
         self.results_table = QTableWidget()
-        self.results_table.setColumnCount(6)
-        self.results_table.setHorizontalHeaderLabels(
-            ["Miejsce", "Kraj", "Zawodnik", "I seria", "II seria", "Suma pkt."])
+        self.results_table.setColumnCount(5)
+        self.results_table.setHorizontalHeaderLabels(["Miejsce", "Kraj", "Zawodnik", "I seria", "II seria"])
         self.results_table.verticalHeader().setDefaultSectionSize(40)
         self.results_table.verticalHeader().setVisible(False)
         self.results_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
@@ -341,6 +341,31 @@ class MainWindow(QMainWindow):
         else:
             if jumper in self.selection_order:
                 self.selection_order.remove(jumper)
+
+    def _sort_jumper_list(self, sort_text):
+        items_data = []
+        for i in range(self.jumper_list_widget.count()):
+            item = self.jumper_list_widget.item(i)
+            jumper = item.data(Qt.UserRole)
+            check_state = item.checkState()
+            items_data.append((jumper, check_state))
+
+        if sort_text == "Wg Kraju":
+            items_data.sort(key=lambda data: (data[0].nationality, str(data[0])))
+        else:
+            items_data.sort(key=lambda data: str(data[0]))
+
+        self.jumper_list_widget.itemChanged.disconnect(self._on_jumper_item_changed)
+        self.jumper_list_widget.clear()
+
+        for jumper, check_state in items_data:
+            item = QListWidgetItem(self.create_rounded_flag_icon(jumper.nationality), str(jumper))
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(check_state)
+            item.setData(Qt.UserRole, jumper)
+            self.jumper_list_widget.addItem(item)
+
+        self.jumper_list_widget.itemChanged.connect(self._on_jumper_item_changed)
 
     def play_sound(self):
         if hasattr(self, 'sound_loaded') and self.sound_loaded:
@@ -441,8 +466,7 @@ class MainWindow(QMainWindow):
         self.competition_order = self.selection_order
 
         for jumper in self.selection_order:
-            self.competition_results.append(
-                {"jumper": jumper, "d1": 0.0, "p1": 0.0, "d2": 0.0, "p2": 0.0, "total": 0.0})
+            self.competition_results.append({"jumper": jumper, "d1": 0.0, "d2": 0.0})
 
         self.results_table.clearContents()
         self.results_table.setRowCount(len(self.competition_results))
@@ -455,7 +479,10 @@ class MainWindow(QMainWindow):
             if self.current_round == 1:
                 self.competition_status_label.setText("Koniec 1. serii. Rozpoczynanie 2. serii...")
                 self.current_round = 2
-                self.competition_results.sort(key=lambda x: x["total"], reverse=True)
+
+                # Sortowanie po odległości w 1. serii
+                self.competition_results.sort(key=lambda x: x["d1"], reverse=True)
+
                 finalists = self.competition_results[:30]
                 finalists.reverse()
                 self.competition_order = [res["jumper"] for res in finalists]
@@ -466,23 +493,20 @@ class MainWindow(QMainWindow):
                 QTimer.singleShot(1500, self._process_next_jumper)
             else:
                 self.competition_status_label.setText("Zawody zakończone!")
+                self.competition_results.sort(key=lambda x: (x["d1"] + x["d2"]), reverse=True)
                 self._update_competition_table()
             return
 
         jumper = self.competition_order[self.current_jumper_index]
         self.competition_status_label.setText(f"Seria {self.current_round}: skacze {jumper}...")
         distance = fly_simulation(self.competition_hill, jumper, self.competition_gate)
-        points_per_meter = 2.0 if self.competition_hill.K <= 100 else 1.8
-        points = 60 + (distance - self.competition_hill.K) * points_per_meter
+
         res_item = next(item for item in self.competition_results if item["jumper"] == jumper)
         if self.current_round == 1:
             res_item["d1"] = distance
-            res_item["p1"] = points
-            res_item["total"] = points
         else:
             res_item["d2"] = distance
-            res_item["p2"] = points
-            res_item["total"] = res_item["p1"] + res_item["p2"]
+
         self._update_competition_table()
         self.current_jumper_index += 1
         QTimer.singleShot(150, self._process_next_jumper)
@@ -492,7 +516,6 @@ class MainWindow(QMainWindow):
         for i, res in enumerate(self.competition_results):
             jumper = res["jumper"]
 
-            # Wstawianie widgetu QLabel z flagą do komórki
             flag_label = QLabel()
             flag_pixmap = self._create_rounded_flag_pixmap(jumper.nationality)
             if not flag_pixmap.isNull():
@@ -502,16 +525,15 @@ class MainWindow(QMainWindow):
             flag_label.setStyleSheet("padding: 4px;")
             self.results_table.setCellWidget(i, 1, flag_label)
 
-            # Pozostałe komórki
             self.results_table.setItem(i, 0, QTableWidgetItem(str(i + 1)))
             self.results_table.setItem(i, 2, QTableWidgetItem(str(jumper)))
             self.results_table.setItem(i, 3, QTableWidgetItem(f"{res['d1']:.2f}" if res['d1'] > 0 else "-"))
             self.results_table.setItem(i, 4, QTableWidgetItem(f"{res['d2']:.2f}" if res['d2'] > 0 else "-"))
-            self.results_table.setItem(i, 5, QTableWidgetItem(f"{res['total']:.1f}"))
 
         QApplication.processEvents()
 
     def run_simulation(self):
+        self.play_sound()
         if not self.selected_jumper or not self.selected_hill:
             self.result_text.setText("BŁĄD: Musisz wybrać zawodnika i skocznię!")
             return
@@ -663,5 +685,6 @@ class MainWindow(QMainWindow):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainWindow()
+    window.showMaximized()
     window.show()
     sys.exit(app.exec())

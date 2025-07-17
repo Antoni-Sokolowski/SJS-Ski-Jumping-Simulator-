@@ -2,6 +2,7 @@
   "hills": [
     {
       "name": "Zakopane",
+      "country": "Pl",
       "e1": 97.8,
       "e2": 77,
       "gates": 34,
@@ -29,6 +30,7 @@
     },
     {
       "name": "Courchevel",
+      "country": "Fr",
       "e1": 104.65,
       "e2": 80.3,
       "gates": 39,
@@ -56,6 +58,7 @@
     },
     {
       "name": "Vikersund",
+      "country": "No",
       "e1": 128.9,
       "e2": 94,
       "gates": 42,
@@ -86,6 +89,7 @@
     {
       "name": "Kamil",
       "last_name": "Stoch",
+      "nationality": "Pl",
       "mass": 60,
       "height": 1.72,
       "jump_force": 1000

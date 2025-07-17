@@ -9,6 +9,7 @@ import scipy.optimize as so
 class Hill:
     def __init__(self,
                  name: str,                 # Nazwa skoczni
+                 country: str,              # Kraj
                  e1: float,                 # Długość najazdu po krzywej (najwyższa belka - próg)
                  e2: float,                 # Długość najazdu po krzywej (najniższa belka - próg)
                  gates: int,                # Liczba bramek startowych
@@ -33,10 +34,12 @@ class Hill:
                  L: float,                  # Koniec sterfy lądowania (zazwyczaj HS)
                  Zu: float,                 # Różnica wysokości między progiem a najniższym punktem zeskoku
 
+
                  inrun_friction_coefficient: float = 0.02  # Współczynnik tarcia na najeździe
                  ):
 
         self.name = name
+        self.country = country
         self.e1 = e1
         self.e2 = e2
         self.gates = gates

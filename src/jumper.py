@@ -8,6 +8,7 @@ class Jumper:
     def __init__(self,
                  name: str,                                     # Imię
                  last_name: str,                                # Nazwisko
+                 nationality: str = None,                              # Narodowość
                  mass: float = 60,                              # Waga
                  height: float = 1.72,                          # Wzrost
 
@@ -35,6 +36,7 @@ class Jumper:
 
         self.name = name
         self.last_name = last_name
+        self.nationality = nationality
         self.mass = mass
         self.height = height
         self.inrun_drag_coefficient = inrun_drag_coefficient

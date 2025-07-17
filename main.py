@@ -1,7 +1,9 @@
 import sys
 import os
-from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QSpinBox, QPushButton, QTextEdit, QLabel, QStackedWidget, QSlider
+from PySide6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QSpinBox, \
+    QPushButton, QTextEdit, QLabel, QStackedWidget, QSlider
 from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QIcon, QPixmap, QImage
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -10,10 +12,11 @@ import matplotlib.animation as animation
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import numpy as np
 import math
-from PIL import Image
+from PIL import Image, ImageDraw
 import scipy.io.wavfile as wavfile
 from src.simulation import load_data_from_json, inrun_simulation, fly_simulation
 from src.hill import Hill
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -149,15 +152,18 @@ class MainWindow(QMainWindow):
         if not os.path.exists(sound_file):
             print(f"BŁĄD: Plik '{sound_file}' nie znaleziony!")
             self.result_text = QTextEdit()
-            self.result_text.setText("BŁĄD: Plik 'click.wav' nie znaleziony! Umieść poprawny plik WAV w folderze projektu.")
+            self.result_text.setText(
+                "BŁĄD: Plik 'click.wav' nie znaleziony! Umieść poprawny plik WAV w folderze projektu.")
             self.sound_loaded = False
         else:
             try:
                 sample_rate, _ = wavfile.read(sound_file)
                 if sample_rate not in [44100, 48000]:
-                    print(f"BŁĄD: Plik '{sound_file}' ma nieodpowiednią częstotliwość próbkowania ({sample_rate} Hz). Wymagane: 44100 lub 48000 Hz.")
+                    print(
+                        f"BŁĄD: Plik '{sound_file}' ma nieodpowiednią częstotliwość próbkowania ({sample_rate} Hz). Wymagane: 44100 lub 48000 Hz.")
                     self.result_text = QTextEdit()
-                    self.result_text.setText("BŁĄD: Plik 'click.wav' ma nieodpowiedni format. Użyj WAV 44100/48000 Hz, 16-bit PCM.")
+                    self.result_text.setText(
+                        "BŁĄD: Plik 'click.wav' ma nieodpowiedni format. Użyj WAV 44100/48000 Hz, 16-bit PCM.")
                     self.sound_loaded = False
                 else:
                     self.player.setSource(QUrl.fromLocalFile(sound_file))
@@ -167,7 +173,8 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 print(f"BŁĄD: Nie można odczytać pliku '{sound_file}': {str(e)}")
                 self.result_text = QTextEdit()
-                self.result_text.setText(f"BŁĄD: Nie można odczytać 'click.wav': {str(e)}. Umieść poprawny plik WAV w folderze projektu.")
+                self.result_text.setText(
+                    f"BŁĄD: Nie można odczytać 'click.wav': {str(e)}. Umieść poprawny plik WAV w folderze projektu.")
                 self.sound_loaded = False
 
         # Central widget with stacked layout
@@ -225,7 +232,8 @@ class MainWindow(QMainWindow):
         self.jumper_combo.addItem("Wybierz zawodnika")
         self.all_hills, self.all_jumpers = load_data_from_json()
         for jumper in self.all_jumpers:
-            self.jumper_combo.addItem(str(jumper))
+            flag_icon = self.create_rounded_flag_icon(jumper.nationality)
+            self.jumper_combo.addItem(flag_icon, str(jumper))
         self.jumper_combo.currentIndexChanged.connect(self.update_jumper)
         jumper_layout.addWidget(jumper_label)
         jumper_layout.addWidget(self.jumper_combo)
@@ -237,7 +245,8 @@ class MainWindow(QMainWindow):
         self.hill_combo = QComboBox()
         self.hill_combo.addItem("Wybierz skocznię")
         for hill in self.all_hills:
-            self.hill_combo.addItem(str(hill))
+            flag_icon = self.create_rounded_flag_icon(hill.country)
+            self.hill_combo.addItem(flag_icon, str(hill))
         self.hill_combo.currentIndexChanged.connect(self.update_hill)
         hill_layout.addWidget(hill_label)
         hill_layout.addWidget(self.hill_combo)
@@ -274,7 +283,8 @@ class MainWindow(QMainWindow):
         simulation_layout.addWidget(self.result_text)
 
         # Matplotlib canvas
-        self.figure = Figure(facecolor=f"#{self.adjust_brightness('1a1a1a' if self.current_theme == 'dark' else 'f0f0f0', self.contrast_level)}")
+        self.figure = Figure(
+            facecolor=f"#{self.adjust_brightness('1a1a1a' if self.current_theme == 'dark' else 'f0f0f0', self.contrast_level)}")
         self.canvas = FigureCanvas(self.figure)
         simulation_layout.addWidget(self.canvas)
 
@@ -382,7 +392,7 @@ class MainWindow(QMainWindow):
 
     def adjust_brightness(self, hex_color, contrast):
         hex_color = hex_color.lstrip('#')
-        rgb = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+        rgb = tuple(int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
         rgb = [min(max(int(c * contrast), 0), 255) for c in rgb]
         return f"{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
 
@@ -412,7 +422,8 @@ class MainWindow(QMainWindow):
             self.ani.event_source.stop()
             self.ani = None
         if not hasattr(self, 'sound_loaded') or not self.sound_loaded:
-            self.result_text.setText("BŁĄD: Plik 'click.wav' nie znaleziony lub nieprawidłowy. Użyj WAV 44100/48000 Hz, 16-bit PCM.")
+            self.result_text.setText(
+                "BŁĄD: Plik 'click.wav' nie znaleziony lub nieprawidłowy. Użyj WAV 44100/48000 Hz, 16-bit PCM.")
 
     def change_theme(self, theme):
         self.current_theme = "dark" if theme == "Ciemny" else "light"
@@ -435,8 +446,50 @@ class MainWindow(QMainWindow):
             for label in widget.findChildren(QLabel):
                 if "Ski Jumping Simulator" in label.text() or "Symulacja skoku" in label.text() or "Ustawienia" in label.text() or "Opis Projektu" in label.text():
                     label.setStyleSheet(f"font-size: 32px; font-weight: bold; color: {title_color};")
-        self.figure.set_facecolor(f"#{self.adjust_brightness('1a1a1a' if self.current_theme == 'dark' else 'f0f0f0', self.contrast_level)}")
+        self.figure.set_facecolor(
+            f"#{self.adjust_brightness('1a1a1a' if self.current_theme == 'dark' else 'f0f0f0', self.contrast_level)}")
         self.canvas.draw()
+
+    def create_rounded_flag_icon(self, country_code, radius=6):
+        """Creates a QIcon with rounded corners from a flag image file."""
+        # Fix for the "None" error
+        if not country_code:
+            return QIcon()
+
+        flag_path = os.path.join("assets", "flags", f"{country_code}.png")
+
+        if not os.path.exists(flag_path):
+            return QIcon()
+
+        try:
+            # Define the final size for the icon
+            final_size = (32, 22)
+
+            with Image.open(flag_path) as img:
+                # 1. Resize the image to its final small size FIRST
+                img_resized = img.resize(final_size, Image.Resampling.LANCZOS).convert("RGBA")
+
+            # 2. Create a mask for the NEW small size
+            mask = Image.new('L', img_resized.size, 0)
+            draw = ImageDraw.Draw(mask)
+
+            # 3. Apply rounding with a visible radius relative to the small size
+            draw.rounded_rectangle(((0, 0), img_resized.size), radius=radius, fill=255)
+
+            # 4. Apply the mask to the resized image
+            img_resized.putalpha(mask)
+
+            # Convert the final PIL image to QImage
+            data = img_resized.tobytes("raw", "RGBA")
+            qimage = QImage(data, img_resized.size[0], img_resized.size[1], QImage.Format_RGBA8888)
+
+            # Create QPixmap and QIcon
+            pixmap = QPixmap.fromImage(qimage)
+            return QIcon(pixmap)
+
+        except Exception as e:
+            print(f"Error creating flag icon for {country_code}: {e}")
+            return QIcon()
 
     def run_simulation(self):
         if not self.selected_jumper or not self.selected_hill:
@@ -470,7 +523,8 @@ class MainWindow(QMainWindow):
             time_step = 0.01
             max_hill_length = self.selected_hill.n + self.selected_hill.a_finish + 50
             max_height = 0
-            while current_position_y > self.selected_hill.y_landing(current_position_x) and current_position_x < max_hill_length:
+            while current_position_y > self.selected_hill.y_landing(
+                    current_position_x) and current_position_x < max_hill_length:
                 total_velocity = math.sqrt(current_velocity_x ** 2 + current_velocity_y ** 2)
                 angle_of_flight_rad = math.atan2(current_velocity_y, current_velocity_x)
                 force_g_y = -self.selected_jumper.mass * 9.81
@@ -500,8 +554,10 @@ class MainWindow(QMainWindow):
             # Animate minimalist ski jump with fixed view and adjusted scale
             self.figure.clear()
             ax = self.figure.add_subplot(111)
-            ax.set_facecolor(f"#{self.adjust_brightness('1a1a1a' if self.current_theme == 'dark' else 'f0f0f0', self.contrast_level)}")
-            self.figure.patch.set_facecolor(f"#{self.adjust_brightness('1a1a1a' if self.current_theme == 'dark' else 'f0f0f0', self.contrast_level)}")
+            ax.set_facecolor(
+                f"#{self.adjust_brightness('1a1a1a' if self.current_theme == 'dark' else 'f0f0f0', self.contrast_level)}")
+            self.figure.patch.set_facecolor(
+                f"#{self.adjust_brightness('1a1a1a' if self.current_theme == 'dark' else 'f0f0f0', self.contrast_level)}")
             ax.axis('off')
             ax.set_xlim(0, max_hill_length + 10)
             ax.set_ylim(min(min(self.y_landing), 0) - 5, max_height * 1.5 + 5)
@@ -545,15 +601,17 @@ class MainWindow(QMainWindow):
                         ab.xy = (x, y)
                     else:
                         jumper_point.set_data([x], [y])
-                    trail_x = [p[0] for p in self.positions[:frame+1]]
-                    trail_y = [p[1] for p in self.positions[:frame+1]]
+                    trail_x = [p[0] for p in self.positions[:frame + 1]]
+                    trail_y = [p[1] for p in self.positions[:frame + 1]]
                     trail_line.set_data(trail_x, trail_y)
                 if frame < len(self.x_landing):
                     landing_line.set_data(self.x_landing[:frame], self.y_landing[:frame])
                 return plot_elements
 
             try:
-                self.ani = animation.FuncAnimation(self.figure, update, init_func=init, frames=max(len(self.positions), len(self.x_landing)), interval=5, blit=False, repeat=False)
+                self.ani = animation.FuncAnimation(self.figure, update, init_func=init,
+                                                   frames=max(len(self.positions), len(self.x_landing)), interval=5,
+                                                   blit=False, repeat=False)
                 self.canvas.draw()
             except Exception as e:
                 self.result_text.setText(f"BŁĄD: Problem z animacją: {str(e)}")
@@ -576,14 +634,18 @@ class MainWindow(QMainWindow):
                 ax.set_ylim(final_ylim)
                 return plot_elements
             t = frame / zoom_frames
-            new_xlim = (initial_xlim[0] + t * (final_xlim[0] - initial_xlim[0]), initial_xlim[1] + t * (final_xlim[1] - initial_xlim[1]))
-            new_ylim = (initial_ylim[0] + t * (final_ylim[0] - initial_ylim[0]), initial_ylim[1] + t * (final_ylim[1] - initial_ylim[1]))
+            new_xlim = (initial_xlim[0] + t * (final_xlim[0] - initial_xlim[0]),
+                        initial_xlim[1] + t * (final_xlim[1] - initial_xlim[1]))
+            new_ylim = (initial_ylim[0] + t * (final_ylim[0] - initial_ylim[0]),
+                        initial_ylim[1] + t * (final_ylim[1] - initial_ylim[1]))
             ax.set_xlim(new_xlim)
             ax.set_ylim(new_ylim)
             return plot_elements
 
-        zoom_ani = animation.FuncAnimation(self.figure, zoom_update, frames=zoom_frames + 1, interval=50, blit=False, repeat=False)
+        zoom_ani = animation.FuncAnimation(self.figure, zoom_update, frames=zoom_frames + 1, interval=50, blit=False,
+                                           repeat=False)
         self.canvas.draw()
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

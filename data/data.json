@@ -98,8 +98,7 @@
       "last_name": "Prevc",
       "nationality": "Si",
       "mass": 58,
-      "jump_force": 1400,
-      "flight_lift_coefficient": 0.92
+      "jump_force": 1350
     },
     {
       "name": "Valentin",

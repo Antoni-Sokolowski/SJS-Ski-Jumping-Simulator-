@@ -32,8 +32,6 @@ class Hill:
                  betaP_deg: float,          # Kąt nachylenia stycznej w punkcie P
                  beta_deg: float,           # Kąt nachylenia stycznej w punkcie K
                  betaL_deg: float,          # Kąt nachylenia stycznej w punkcie L
-                 rl: float,                 # Promień okrągłego obszaru lądowania
-                 r2: float,                 # Promień krzywej przejściower z L do U w punkcie U
                  P: float,                  # Początek strefy lądowania
                  K: float,                  # Punkt konstrukcyjny
                  L: float,                  # Koniec sterfy lądowania (zazwyczaj HS)
@@ -61,8 +59,6 @@ class Hill:
         self.betaP_deg = betaP_deg
         self.beta_deg = beta_deg
         self.betaL_deg = betaL_deg
-        self.rl = rl
-        self.r2 = r2
         self.P = P
         self.K = K
         self.L = L

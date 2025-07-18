@@ -2,7 +2,7 @@
   "hills": [
     {
       "name": "Planica",
-      "country": "Sl",
+      "country": "Si",
       "e1": 133.8,
       "e2": 102.66,
       "gates": 31,
@@ -23,7 +23,7 @@
       "K": 200,
       "L": 240,
       "Zu": 135,
-      "inrun_friction_coefficient": 0.02
+      "inrun_friction_coefficient": 0.03
     },
     {
       "name": "Oslo",
@@ -130,7 +130,7 @@
       "country": "De",
       "e1": 101.82,
       "e2": 78.22,
-      "gates": 47,
+      "gates": 33,
       "t": 6.7,
       "gamma_deg": 35,
       "alpha_deg": 11,
@@ -148,7 +148,7 @@
       "K": 130,
       "L": 147,
       "Zu": 91.08,
-      "inrun_friction_coefficient": 0.035
+      "inrun_friction_coefficient": 0.05
     },
     {
       "name": "Sapporo",
@@ -503,166 +503,334 @@
   ],
   "jumpers": [
     {
-      "name": "Kamil",
-      "last_name": "Stoch",
-      "nationality": "PL",
-      "mass": 60.0,
-      "height": 1.73,
-      "jump_force": 1500
-    },
-    {
-      "name": "Adam",
-      "last_name": "Małysz",
-      "nationality": "PL",
-      "mass": 59.0,
-      "height": 1.70,
-      "jump_force": 1700,
+      "name": "Daniel",
+      "last_name": "TSCHOFENIG",
+      "nationality": "At",
+      "mass": 57,
+      "jump_force": 1820,
+      "inrun_drag_coefficient": 0.385,
+      "flight_lift_coefficient": 0.92,
       "flight_drag_coefficient": 0.4,
-      "flight_lift_coefficient": 0.9
+      "flight_frontal_area": 0.47
     },
     {
-      "name": "Piotr",
-      "last_name": "Żyła",
-      "nationality": "PL",
-      "mass": 62.0,
-      "height": 1.76,
-      "jump_force": 1520
-    },
-    {
-      "name": "Dawid",
-      "last_name": "Kubacki",
-      "nationality": "PL",
-      "mass": 64.0,
-      "height": 1.80,
-      "jump_force": 1490
+      "name": "Jan",
+      "last_name": "HOERL",
+      "nationality": "At",
+      "mass": 58,
+      "jump_force": 1810,
+      "inrun_drag_coefficient": 0.395,
+      "flight_lift_coefficient": 0.915,
+      "flight_drag_coefficient": 0.42,
+      "flight_frontal_area": 0.48
     },
     {
       "name": "Stefan",
-      "last_name": "Kraft",
-      "nationality": "AT",
-      "mass": 58.0,
-      "height": 1.70,
-      "jump_force": 1510
-    },
-    {
-      "name": "Ryoyu",
-      "last_name": "Kobayashi",
-      "nationality": "JP",
-      "mass": 60.0,
-      "height": 1.74,
-      "jump_force": 1475
-    },
-    {
-      "name": "Halvor Egner",
-      "last_name": "Granerud",
-      "nationality": "NO",
-      "mass": 63.0,
-      "height": 1.78,
-      "jump_force": 1505
+      "last_name": "KRAFT",
+      "nationality": "At",
+      "mass": 56,
+      "jump_force": 1780,
+      "inrun_drag_coefficient": 0.39,
+      "flight_lift_coefficient": 0.91,
+      "flight_drag_coefficient": 0.4,
+      "flight_frontal_area": 0.46
     },
     {
       "name": "Anze",
-      "last_name": "Lanisek",
-      "nationality": "SI",
-      "mass": 61.0,
-      "height": 1.75,
-      "jump_force": 1485
+      "last_name": "LANISEK",
+      "nationality": "Si",
+      "mass": 59,
+      "jump_force": 1785,
+      "inrun_drag_coefficient": 0.415,
+      "flight_lift_coefficient": 0.91,
+      "flight_drag_coefficient": 0.406,
+      "flight_frontal_area": 0.49
     },
     {
-      "name": "Karl",
-      "last_name": "Geiger",
-      "nationality": "DE",
-      "mass": 65.0,
-      "height": 1.80,
-      "jump_force": 1515
-    },
-    {
-      "name": "Markus",
-      "last_name": "Eisenbichler",
-      "nationality": "DE",
-      "mass": 66.0,
-      "height": 1.79,
-      "jump_force": 1495
-    },
-    {
-      "name": "Peter",
-      "last_name": "Prevc",
-      "nationality": "SI",
-      "mass": 64.0,
-      "height": 1.80,
-      "jump_force": 1500
-    },
-    {
-      "name": "Simon",
-      "last_name": "Ammann",
-      "nationality": "CH",
-      "mass": 58.0,
-      "height": 1.72,
-      "jump_force": 1470
-    },
-    {
-      "name": "Andreas",
-      "last_name": "Wellinger",
-      "nationality": "DE",
-      "mass": 63.0,
-      "height": 1.83,
-      "jump_force": 1525
-    },
-    {
-      "name": "Johann Andre",
-      "last_name": "Forfang",
-      "nationality": "NO",
-      "mass": 62.0,
-      "height": 1.79,
-      "jump_force": 1480
-    },
-    {
-      "name": "Janne",
-      "last_name": "Ahonen",
-      "nationality": "FI",
-      "mass": 67.0,
-      "height": 1.84,
-      "jump_force": 1510
+      "name": "Pius",
+      "last_name": "PASCHKE",
+      "nationality": "De",
+      "mass": 55,
+      "jump_force": 1760,
+      "inrun_drag_coefficient": 0.405,
+      "flight_lift_coefficient": 0.874,
+      "flight_drag_coefficient": 0.424,
+      "flight_frontal_area": 0.45
     },
     {
       "name": "Gregor",
-      "last_name": "Schlierenzauer",
-      "nationality": "AT",
-      "mass": 64.0,
-      "height": 1.81,
-      "jump_force": 1490
+      "last_name": "DESCHWANDEN",
+      "nationality": "Ch",
+      "mass": 63,
+      "jump_force": 1795,
+      "inrun_drag_coefficient": 0.412,
+      "flight_lift_coefficient": 0.878,
+      "flight_drag_coefficient": 0.42,
+      "flight_frontal_area": 0.53
     },
     {
-      "name": "Thomas",
-      "last_name": "Morgenstern",
-      "nationality": "AT",
-      "mass": 62.0,
-      "height": 1.74,
-      "jump_force": 1505
+      "name": "Andreas",
+      "last_name": "WELLINGER",
+      "nationality": "De",
+      "mass": 64,
+      "jump_force": 1755,
+      "inrun_drag_coefficient": 0.402,
+      "flight_lift_coefficient": 0.89,
+      "flight_drag_coefficient": 0.418,
+      "flight_frontal_area": 0.54
     },
     {
-      "name": "Noriaki",
-      "last_name": "Kasai",
-      "nationality": "JP",
-      "mass": 61.0,
-      "height": 1.76,
-      "jump_force": 1475
+      "name": "Johann Andre",
+      "last_name": "FORFANG",
+      "nationality": "No",
+      "mass": 57,
+      "jump_force": 1745,
+      "inrun_drag_coefficient": 0.41,
+      "flight_lift_coefficient": 0.895,
+      "flight_drag_coefficient": 0.43,
+      "flight_frontal_area": 0.47
     },
     {
-      "name": "Matti",
-      "last_name": "Nykänen",
-      "nationality": "FI",
-      "mass": 60.0,
-      "height": 1.77,
-      "jump_force": 1520
+      "name": "Ryoyu",
+      "last_name": "KOBAYASHI",
+      "nationality": "Jp",
+      "mass": 60,
+      "jump_force": 1810,
+      "inrun_drag_coefficient": 0.408,
+      "flight_lift_coefficient": 0.91,
+      "flight_drag_coefficient": 0.428,
+      "flight_frontal_area": 0.5
     },
     {
-      "name": "Jens",
-      "last_name": "Weissflog",
-      "nationality": "DE",
-      "mass": 64.0,
-      "height": 1.73,
-      "jump_force": 1495
+      "name": "Domen",
+      "last_name": "PREVC",
+      "nationality": "Si",
+      "mass": 59,
+      "jump_force": 1740,
+      "inrun_drag_coefficient": 0.408,
+      "flight_lift_coefficient": 0.906,
+      "flight_drag_coefficient": 0.412,
+      "flight_frontal_area": 0.49
+    },
+    {
+      "name": "Maximilian",
+      "last_name": "ORTNER",
+      "nationality": "At",
+      "mass": 60,
+      "jump_force": 1728,
+      "inrun_drag_coefficient": 0.396,
+      "flight_lift_coefficient": 0.87,
+      "flight_drag_coefficient": 0.426,
+      "flight_frontal_area": 0.5
+    },
+    {
+      "name": "Kristoffer Eriksen",
+      "last_name": "SUNDAL",
+      "nationality": "No",
+      "mass": 60,
+      "jump_force": 1720,
+      "inrun_drag_coefficient": 0.412,
+      "flight_lift_coefficient": 0.878,
+      "flight_drag_coefficient": 0.42,
+      "flight_frontal_area": 0.5
+    },
+    {
+      "name": "Karl",
+      "last_name": "GEIGER",
+      "nationality": "De",
+      "mass": 62,
+      "jump_force": 1765,
+      "inrun_drag_coefficient": 0.406,
+      "flight_lift_coefficient": 0.87,
+      "flight_drag_coefficient": 0.428,
+      "flight_frontal_area": 0.52
+    },
+    {
+      "name": "Paweł",
+      "last_name": "WĄSEK",
+      "nationality": "Pl",
+      "mass": 60,
+      "jump_force": 1750,
+      "inrun_drag_coefficient": 0.41,
+      "flight_lift_coefficient": 0.898,
+      "flight_drag_coefficient": 0.42,
+      "flight_frontal_area": 0.5
+    },
+    {
+      "name": "Timi",
+      "last_name": "ZAJC",
+      "nationality": "Si",
+      "mass": 60,
+      "jump_force": 1755,
+      "inrun_drag_coefficient": 0.408,
+      "flight_lift_coefficient": 0.884,
+      "flight_drag_coefficient": 0.405,
+      "flight_frontal_area": 0.5
+    },
+    {
+      "name": "Marius",
+      "last_name": "LINDVIK",
+      "nationality": "No",
+      "mass": 60,
+      "jump_force": 1765,
+      "inrun_drag_coefficient": 0.406,
+      "flight_lift_coefficient": 0.876,
+      "flight_drag_coefficient": 0.416,
+      "flight_frontal_area": 0.5
+    },
+    {
+      "name": "Manuel",
+      "last_name": "FETTNER",
+      "nationality": "At",
+      "mass": 63,
+      "jump_force": 1765,
+      "inrun_drag_coefficient": 0.398,
+      "flight_lift_coefficient": 0.862,
+      "flight_drag_coefficient": 0.424,
+      "flight_frontal_area": 0.53
+    },
+    {
+      "name": "Ren",
+      "last_name": "NIKAIDO",
+      "nationality": "Jp",
+      "mass": 57,
+      "jump_force": 1758,
+      "inrun_drag_coefficient": 0.41,
+      "flight_lift_coefficient": 0.864,
+      "flight_drag_coefficient": 0.428,
+      "flight_frontal_area": 0.49
+    },
+    {
+      "name": "Aleksander",
+      "last_name": "ZNISZCZOŁ",
+      "nationality": "Pl",
+      "mass": 59,
+      "jump_force": 1745,
+      "inrun_drag_coefficient": 0.412,
+      "flight_lift_coefficient": 0.878,
+      "flight_drag_coefficient": 0.426,
+      "flight_frontal_area": 0.49
+    },
+    {
+      "name": "Halvor Egner",
+      "last_name": "GRANERUD",
+      "nationality": "No",
+      "mass": 60,
+      "jump_force": 1765,
+      "inrun_drag_coefficient": 0.41,
+      "flight_lift_coefficient": 0.874,
+      "flight_drag_coefficient": 0.42,
+      "flight_frontal_area": 0.5
+    },
+    {
+      "name": "Tate",
+      "last_name": "FRANTZ",
+      "nationality": "Us",
+      "mass": 58,
+      "jump_force": 1748,
+      "inrun_drag_coefficient": 0.41,
+      "flight_lift_coefficient": 0.88,
+      "flight_drag_coefficient": 0.418,
+      "flight_frontal_area": 0.48
+    },
+    {
+      "name": "Artti",
+      "last_name": "AIGRO",
+      "nationality": "Ee",
+      "mass": 52,
+      "jump_force": 1735,
+      "inrun_drag_coefficient": 0.41,
+      "flight_lift_coefficient": 0.875,
+      "flight_drag_coefficient": 0.41,
+      "flight_frontal_area": 0.42
+    },
+    {
+      "name": "Philipp",
+      "last_name": "RAIMUND",
+      "nationality": "De",
+      "mass": 58,
+      "jump_force": 1770,
+      "inrun_drag_coefficient": 0.408,
+      "flight_lift_coefficient": 0.865,
+      "flight_drag_coefficient": 0.428,
+      "flight_frontal_area": 0.48
+    },
+    {
+      "name": "Naoki",
+      "last_name": "NAKAMURA",
+      "nationality": "Jp",
+      "mass": 63,
+      "jump_force": 1750,
+      "inrun_drag_coefficient": 0.412,
+      "flight_lift_coefficient": 0.874,
+      "flight_drag_coefficient": 0.416,
+      "flight_frontal_area": 0.53
+    },
+    {
+      "name": "Benjamin",
+      "last_name": "OESTVOLD",
+      "nationality": "No",
+      "mass": 60,
+      "jump_force": 1740,
+      "inrun_drag_coefficient": 0.41,
+      "flight_lift_coefficient": 0.858,
+      "flight_drag_coefficient": 0.43,
+      "flight_frontal_area": 0.5
+    },
+    {
+      "name": "Valentin",
+      "last_name": "FOUBERT",
+      "nationality": "Fr",
+      "mass": 56,
+      "jump_force": 1734,
+      "inrun_drag_coefficient": 0.414,
+      "flight_lift_coefficient": 0.864,
+      "flight_drag_coefficient": 0.426,
+      "flight_frontal_area": 0.46
+    },
+    {
+      "name": "Kevin",
+      "last_name": "BICKNER",
+      "nationality": "Us",
+      "mass": 63.0,
+      "jump_force": 1750,
+      "inrun_drag_coefficient": 0.416,
+      "flight_lift_coefficient": 0.856,
+      "flight_drag_coefficient": 0.426,
+      "flight_frontal_area": 0.53
+    },
+    {
+      "name": "Vladimir",
+      "last_name": "ZOGRAFSKI",
+      "nationality": "Bg",
+      "mass": 57,
+      "jump_force": 1742,
+      "inrun_drag_coefficient": 0.414,
+      "flight_lift_coefficient": 0.854,
+      "flight_drag_coefficient": 0.424,
+      "flight_frontal_area": 0.47
+    },
+    {
+      "name": "Lovro",
+      "last_name": "KOS",
+      "nationality": "Si",
+      "mass": 57,
+      "jump_force": 1752,
+      "inrun_drag_coefficient": 0.408,
+      "flight_lift_coefficient": 0.86,
+      "flight_drag_coefficient": 0.42,
+      "flight_frontal_area": 0.47
+    },
+    {
+      "name": "Kamil",
+      "last_name": "STOCH",
+      "nationality": "Pl",
+      "mass": 55,
+      "jump_force": 1765,
+      "inrun_drag_coefficient": 0.416,
+      "flight_lift_coefficient": 0.87,
+      "flight_drag_coefficient": 0.418,
+      "flight_frontal_area": 0.45
     }
   ]
 }

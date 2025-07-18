@@ -178,8 +178,8 @@ class Hill:
         '''Funkcja, która zwraca wysokość zeskoku w danym miejscu'''
 
         # Ograniczenie dziedziny
-        if not (0 <= x <= self.n + self.a_finish + 50):
-            raise ValueError(f"Wartość x={x} poza dziedziną [0, {self.n + self.a_finish + 50}]")
+        if not (0 <= x <= self.n + self.a_finish + 100):
+            raise ValueError(f"Wartość x={x} poza dziedziną [0, {self.n + self.a_finish + 100}]")
 
         # Sprawdzenie, czy współczynniki są obliczone
         if (self.a_landing1 == 0.0 and self.b_landing1 == 0.0 and self.c_landing1 == 0.0 and self.d_landing1 == 0.0) or \

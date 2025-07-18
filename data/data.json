@@ -89,35 +89,162 @@
     {
       "name": "Kamil",
       "last_name": "Stoch",
-      "nationality": "Pl",
-      "mass": 60,
-      "jump_force": 1500,
-      "flight_lift_coefficient":  0.87,
-      "flight_drag_coefficient": 0.42
-    },
-    {
-      "name": "Domen",
-      "last_name": "Prevc",
-      "nationality": "Si",
-      "mass": 58,
-      "jump_force": 1400,
-      "flight_lift_coefficient": 0.93,
-      "flight_drag_coefficient": 0.45
-    },
-    {
-      "name": "Valentin",
-      "last_name": "Foubert",
-      "nationality": "Fr",
-      "mass": 58,
-      "jump_force": 1350,
-      "flight_lift_coefficient": 0.88
-    },
-    {
-      "name": "Vladimir",
-      "last_name": "Zografski",
-      "nationality": "Bg",
-      "mass": 57.5,
+      "nationality": "PL",
+      "mass": 60.0,
+      "height": 1.73,
       "jump_force": 1500
+    },
+    {
+      "name": "Adam",
+      "last_name": "Małysz",
+      "nationality": "PL",
+      "mass": 59.0,
+      "height": 1.70,
+      "jump_force": 1480
+    },
+    {
+      "name": "Piotr",
+      "last_name": "Żyła",
+      "nationality": "PL",
+      "mass": 62.0,
+      "height": 1.76,
+      "jump_force": 1520
+    },
+    {
+      "name": "Dawid",
+      "last_name": "Kubacki",
+      "nationality": "PL",
+      "mass": 64.0,
+      "height": 1.80,
+      "jump_force": 1490
+    },
+    {
+      "name": "Stefan",
+      "last_name": "Kraft",
+      "nationality": "AT",
+      "mass": 58.0,
+      "height": 1.70,
+      "jump_force": 1510
+    },
+    {
+      "name": "Ryoyu",
+      "last_name": "Kobayashi",
+      "nationality": "JP",
+      "mass": 60.0,
+      "height": 1.74,
+      "jump_force": 1475
+    },
+    {
+      "name": "Halvor Egner",
+      "last_name": "Granerud",
+      "nationality": "NO",
+      "mass": 63.0,
+      "height": 1.78,
+      "jump_force": 1505
+    },
+    {
+      "name": "Anze",
+      "last_name": "Lanisek",
+      "nationality": "SI",
+      "mass": 61.0,
+      "height": 1.75,
+      "jump_force": 1485
+    },
+    {
+      "name": "Karl",
+      "last_name": "Geiger",
+      "nationality": "DE",
+      "mass": 65.0,
+      "height": 1.80,
+      "jump_force": 1515
+    },
+    {
+      "name": "Markus",
+      "last_name": "Eisenbichler",
+      "nationality": "DE",
+      "mass": 66.0,
+      "height": 1.79,
+      "jump_force": 1495
+    },
+    {
+      "name": "Peter",
+      "last_name": "Prevc",
+      "nationality": "SI",
+      "mass": 64.0,
+      "height": 1.80,
+      "jump_force": 1500
+    },
+    {
+      "name": "Simon",
+      "last_name": "Ammann",
+      "nationality": "CH",
+      "mass": 58.0,
+      "height": 1.72,
+      "jump_force": 1470
+    },
+    {
+      "name": "Andreas",
+      "last_name": "Wellinger",
+      "nationality": "DE",
+      "mass": 63.0,
+      "height": 1.83,
+      "jump_force": 1525
+    },
+    {
+      "name": "Johann Andre",
+      "last_name": "Forfang",
+      "nationality": "NO",
+      "mass": 62.0,
+      "height": 1.79,
+      "jump_force": 1480
+    },
+    {
+      "name": "Janne",
+      "last_name": "Ahonen",
+      "nationality": "FI",
+      "mass": 67.0,
+      "height": 1.84,
+      "jump_force": 1510
+    },
+    {
+      "name": "Gregor",
+      "last_name": "Schlierenzauer",
+      "nationality": "AT",
+      "mass": 64.0,
+      "height": 1.81,
+      "jump_force": 1490
+    },
+    {
+      "name": "Thomas",
+      "last_name": "Morgenstern",
+      "nationality": "AT",
+      "mass": 62.0,
+      "height": 1.74,
+      "jump_force": 1505
+    },
+    {
+      "name": "Noriaki",
+      "last_name": "Kasai",
+      "nationality": "JP",
+      "mass": 61.0,
+      "height": 1.76,
+      "jump_force": 1475
+    },
+    {
+      "name": "Matti",
+      "last_name": "Nykänen",
+      "nationality": "FI",
+      "mass": 60.0,
+      "height": 1.77,
+      "jump_force": 1520
+    },
+    {
+      "name": "Jens",
+      "last_name": "Weissflog",
+      "nationality": "DE",
+      "mass": 64.0,
+      "height": 1.73,
+      "jump_force": 1495
     }
   ]
 }

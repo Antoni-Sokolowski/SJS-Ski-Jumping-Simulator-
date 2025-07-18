@@ -4,8 +4,9 @@ import json
 import os
 import sys
 import math
-import numpy as np
-import matplotlib.pyplot as plt
+
+from PySide6.QtWidgets import QMessageBox
+
 from src.hill import Hill
 from src.jumper import Jumper
 from utils.constants import GRAVITY, AIR_DENSITY
@@ -18,16 +19,11 @@ def get_data_path(filename):
     obok pliku .exe lub w głównym folderze projektu.
     """
     if getattr(sys, 'frozen', False):
-        # Aplikacja działa jako .exe. Używamy ścieżki do samego pliku .exe.
         application_path = os.path.dirname(sys.executable)
     else:
-        # Aplikacja działa jako skrypt .py.
-        # __file__ to ścieżka do tego pliku (simulation.py)
         script_path = os.path.abspath(__file__)
-        # Cofamy się o jeden katalog w górę (z 'src' do głównego folderu projektu)
         application_path = os.path.dirname(os.path.dirname(script_path))
 
-    # Łączymy ścieżkę aplikacji z folderem 'data' i nazwą pliku
     return os.path.join(application_path, 'data', filename)
 
 
@@ -41,19 +37,20 @@ def load_data_from_json():
         hills = [Hill(**h) for h in data['hills']]
         jumpers = [Jumper(**j) for j in data['jumpers']]
 
-        print(f"INFO: Pomyślnie wczytano dane z: {data_path}")
         return hills, jumpers
 
-    except FileNotFoundError:
-        print(f"BŁĄD KRYTYCZNY: Nie znaleziono pliku 'data.json'!")
-        print(f"Program szukał go w lokalizacji: {get_data_path('data.json')}")
-        print("Upewnij się, że folder 'data' z plikiem 'data.json' istnieje obok pliku .exe.")
-        return [], []
-    except KeyError as e:
-        print(f"BŁĄD KRYTYCZNY: W pliku 'data.json' brakuje klucza: {e}. Oczekiwano kluczy 'hills' i 'jumpers'.")
-        return [], []
+    # --- POPRAWKA: Zamiast print(), pokazujemy okno błędu ---
     except Exception as e:
-        print(f"Wystąpił krytyczny błąd podczas wczytywania danych: {e}")
+        title = "Błąd Krytyczny - Nie można wczytać danych"
+        message = (
+            f"Nie udało się wczytać lub przetworzyć pliku 'data.json'!\n\n"
+            f"Błąd: {type(e).__name__}: {e}\n\n"
+            f"Program szukał pliku w lokalizacji:\n{get_data_path('data.json')}\n\n"
+            f"Sprawdź, czy:\n"
+            f"1. Folder 'data' na pewno znajduje się obok pliku .exe.\n"
+            f"2. Plik 'data.json' nie jest uszkodzony i ma poprawną strukturę."
+        )
+        QMessageBox.critical(None, title, message)
         return [], []
 
 

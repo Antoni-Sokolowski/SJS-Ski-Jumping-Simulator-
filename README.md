@@ -152,7 +152,6 @@ The hill parameters are based on the official FIS (International Ski and Snowboa
 | `t`, `gamma_deg`, `alpha_deg`, `r1` | Inrun geometry (takeoff table and transition curve). | **Yes** |
 | `h`, `n`, `s`              | Key dimensions (takeoff height, K-point position).     | **Yes** |
 | `betaP_deg`, `beta_deg`, `betaL_deg` | Landing slope angles at points P, K, and L.      | **Yes** |
-| `rl, r2`                       | Radius of the main landing area curve.                 | **Yes** |
 | `P`, `K`, `L`              | Key points on the landing profile (P-point, K-point, L-point/HS). | **Yes** |
 | `Zu`                       | Height difference to the lowest point of the outrun.   | **Yes** |
 | `inrun_friction_coefficient` | Friction coefficient of the inrun tracks.              | No       |

@@ -123,7 +123,7 @@
       "K": 200,
       "L": 235,
       "Zu": 135,
-      "inrun_friction_coefficient": 0.02
+      "inrun_friction_coefficient": 0.0005
     },
     {
       "name": "Willingen",

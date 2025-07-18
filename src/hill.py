@@ -87,10 +87,6 @@ class Hill:
         self.c_landing2 = 0.0
         self.landing_segment_boundaries = {'polynomial1': (0, self.K), 'parabola2': (self.K, self.L)}
 
-        # Dodatkowe punkt dla pierwszej krzywej
-        self.x_F = 0.05 * self.L
-        self.y_F = -self.s - 1
-
         # Oblicz współczynniki parabol
         self.calculate_landing_parabola_coefficients()
 
@@ -123,27 +119,26 @@ class Hill:
         '''Funkcja, która tworzy nasz zeskok'''
 
         if segment == 'polynomial1':
-            # Punkty dla pierwszej krzywej: (0, -s), (x_F, y_F), (n, -h), nachylenie w x=n
+            # Punkty dla pierwszej krzywej:
             O_coord_x = 0.0
             O_coord_y = -self.s
-            F_coord_x = self.x_F
-            F_coord_y = self.y_F
             K_coord_x = self.n
             K_coord_y = -self.h
             slope_K = -math.tan(self.beta_rad)
+            slope_O = 0
 
             a, b, c, d = v
             R = [0, 0, 0, 0]
             R[0] = a * O_coord_x ** 3 + b * O_coord_x ** 2 + c * O_coord_x + d - O_coord_y  # y(0) = -s
-            R[1] = a * F_coord_x ** 3 + b * F_coord_x ** 2 + c * F_coord_x + d - F_coord_y  # y(x_F) = y_F
-            R[2] = a * K_coord_x ** 3 + b * K_coord_x ** 2 + c * K_coord_x + d - K_coord_y  # y(n) = -h
-            R[3] = 3 * a * K_coord_x ** 2 + 2 * b * K_coord_x + c - slope_K  # y'(n) = -tan(beta_rad)
+            R[1] = a * K_coord_x ** 3 + b * K_coord_x ** 2 + c * K_coord_x + d - K_coord_y  # y(n) = -h
+            R[2] = 3 * a * K_coord_x ** 2 + 2 * b * K_coord_x + c - slope_K  # y'(n) = -tan(beta_rad)
+            R[3] = 3 * a * O_coord_x ** 2 + 2 * b * O_coord_x + c - slope_O
             return R
         else:
-            # Punkty dla drugiej paraboli: (n, -h), (L, -Zu)
+            # Punkty dla drugiej paraboli:
             K_coord_x = self.n
             K_coord_y = -self.h
-            U_coord_x = self.n + 50
+            U_coord_x = self.n + (self.Zu - self.h) / math.tan(self.betaL_rad)
             U_coord_y = -self.Zu
             slope_K = -math.tan(self.beta_rad)
 
@@ -179,7 +174,7 @@ class Hill:
 
         # Ograniczenie dziedziny
         if not (0 <= x <= self.n + self.a_finish + 100):
-            raise ValueError(f"Wartość x={x} poza dziedziną [0, {self.n + self.a_finish + 100}]")
+            raise ValueError(f"Wartość x={x} poza dziedziną [0, {self.n + (self.Zu - self.h) / math.tan(self.betaL_rad) + self.a_finish}]")
 
         # Sprawdzenie, czy współczynniki są obliczone
         if (self.a_landing1 == 0.0 and self.b_landing1 == 0.0 and self.c_landing1 == 0.0 and self.d_landing1 == 0.0) or \
@@ -192,6 +187,7 @@ class Hill:
             return self.a_landing1 * x ** 3 + self.b_landing1 * x ** 2 + self.c_landing1 * x + self.d_landing1
         else:
             return self.a_landing2 * x ** 2 + self.b_landing2 * x + self.c_landing2
+
 
     def __str__(self):
         return f'{self.name} K{self.K} HS{self.L}'

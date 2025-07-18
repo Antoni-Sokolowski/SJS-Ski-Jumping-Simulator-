@@ -1,6 +1,34 @@
 {
   "hills": [
     {
+      "name": "Lillehammer",
+      "country": "No",
+      "e1": 104.05,
+      "e2": 79.35,
+      "gates": 32,
+      "t": 6.25,
+      "gamma_deg": 34,
+      "alpha_deg": 11.5,
+      "r1": 107,
+      "h": 60.93,
+      "n": 106.14,
+      "s": 3.35,
+      "l1": 14.54,
+      "l2": 17,
+      "a_finish": 100,
+      "betaP_deg": 37.2,
+      "beta_deg": 34.3,
+      "betaL_deg": 31.5,
+      "rl": 334.5,
+      "r2l": 105.5,
+      "r2": 99.3,
+      "P": 109,
+      "K": 125,
+      "L": 140,
+      "Zu": 89.11,
+      "inrun_friction_coefficient": 0.02
+    },
+    {
       "name": "Zakopane",
       "country": "Pl",
       "e1": 97.8,
@@ -100,7 +128,9 @@
       "nationality": "PL",
       "mass": 59.0,
       "height": 1.70,
-      "jump_force": 1480
+      "jump_force": 1700,
+      "flight_drag_coefficient": 0.4,
+      "flight_lift_coefficient": 0.9
     },
     {
       "name": "Piotr",

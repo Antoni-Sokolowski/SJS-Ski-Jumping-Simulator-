@@ -2,10 +2,14 @@
 
 import sys
 import os
+import json
+import copy
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                                QComboBox, QSpinBox, QPushButton, QTextEdit, QLabel,
                                QStackedWidget, QSlider, QListWidget, QListWidgetItem,
-                               QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox)
+                               QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox,
+                               QFormLayout, QScrollArea, QDoubleSpinBox, QLineEdit, QTabWidget,
+                               QFileDialog)
 from PySide6.QtCore import Qt, QUrl, QTimer, QSize
 from PySide6.QtGui import QIcon, QPixmap, QImage
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
@@ -17,7 +21,37 @@ import math
 from PIL import Image, ImageDraw
 from src.simulation import load_data_from_json, inrun_simulation, fly_simulation
 from src.hill import Hill
+from src.jumper import Jumper
 
+
+# --- NOWE KLASY WIDGETÓW BLOKUJĄCE PRZYPADKOWE SCROLLOWANIE ---
+class NonScrollableDoubleSpinBox(QDoubleSpinBox):
+    """
+    Niestandardowy DoubleSpinBox, który ignoruje kółko myszy,
+    chyba że pole jest aktywne (ma focus).
+    """
+
+    def wheelEvent(self, event):
+        if self.hasFocus():
+            super().wheelEvent(event)
+        else:
+            event.ignore()
+
+
+class NonScrollableSpinBox(QSpinBox):
+    """
+    Niestandardowy SpinBox, który ignoruje kółko myszy,
+    chyba że pole jest aktywne (ma focus).
+    """
+
+    def wheelEvent(self, event):
+        if self.hasFocus():
+            super().wheelEvent(event)
+        else:
+            event.ignore()
+
+
+# --- KONIEC NOWYCH KLAS ---
 
 def resource_path(relative_path):
     """
@@ -49,8 +83,8 @@ class MainWindow(QMainWindow):
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
 
-        self.MAIN_MENU_IDX, self.SIM_TYPE_MENU_IDX, self.SINGLE_JUMP_IDX, self.COMPETITION_IDX, self.DESCRIPTION_IDX, self.SETTINGS_IDX, self.JUMP_REPLAY_IDX = range(
-            7)
+        self.MAIN_MENU_IDX, self.SIM_TYPE_MENU_IDX, self.SINGLE_JUMP_IDX, self.COMPETITION_IDX, self.DATA_EDITOR_IDX, self.DESCRIPTION_IDX, self.SETTINGS_IDX, self.JUMP_REPLAY_IDX = range(
+            8)
 
         self.current_theme = "dark"
         self.contrast_level = 1.0
@@ -63,11 +97,25 @@ class MainWindow(QMainWindow):
                 QLabel.headerLabel {{ font-size: 32px; font-weight: bold; color: #0078d4; }}
                 QLabel#replayTitleLabel {{ font-size: 24px; font-weight: bold; color: #{self.adjust_brightness('ffffff', contrast)}; }}
                 QLabel#replayStatsLabel {{ font-size: 18px; color: #{self.adjust_brightness('b0b0b0', contrast)}; }}
-                QComboBox, QSpinBox, QTextEdit, QListWidget, QTableWidget {{
+                QComboBox, QSpinBox, QTextEdit, QListWidget, QTableWidget, QLineEdit, QDoubleSpinBox, QTabWidget::pane {{
                     background-color: #{self.adjust_brightness('2a2a2a', contrast)};
                     color: #{self.adjust_brightness('ffffff', contrast)};
                     border: 1px solid #{self.adjust_brightness('4a4a4a', contrast)};
                     padding: 12px; border-radius: 5px; font-size: 16px;
+                }}
+                QTabWidget::tab-bar {{ alignment: center; }}
+                QTabBar::tab {{
+                    background: #{self.adjust_brightness('2a2a2a', contrast)};
+                    color: #{self.adjust_brightness('b0b0b0', contrast)};
+                    border: 1px solid #{self.adjust_brightness('4a4a4a', contrast)};
+                    border-bottom: none;
+                    padding: 10px 25px;
+                    border-top-left-radius: 5px;
+                    border-top-right-radius: 5px;
+                }}
+                QTabBar::tab:selected {{
+                    background: #{self.adjust_brightness('3a3a3a', contrast)};
+                    color: #{self.adjust_brightness('ffffff', contrast)};
                 }}
                 QComboBox QAbstractItemView {{
                     background-color: #{self.adjust_brightness('2a2a2a', contrast)};
@@ -76,6 +124,8 @@ class MainWindow(QMainWindow):
                     selection-background-color: #{self.adjust_brightness('005ea6', contrast)};
                 }}
                 QListWidget::item {{ padding: 5px; }}
+                QListWidget::item:hover {{ background-color: #{self.adjust_brightness('3a3a3a', contrast)}; }}
+                QListWidget::item:selected {{ background-color: #{self.adjust_brightness('005ea6', contrast)}; }}
                 QListWidget::indicator {{ width: 18px; height: 18px; border-radius: 4px; }}
                 QListWidget::indicator:unchecked {{ border: 1px solid #777777; background-color: #2a2a2a; }}
                 QListWidget::indicator:checked {{ border: 1px solid #0078d4; background-color: #0078d4; image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iI2ZmZmZmZiIgZD0iTTkgMTYuMTdMNC44MyAxMmwtMS40MSAxLjQxTDkgMTkgMjEgN2wtMS40MS0xLjQxeiIvPjwvc3ZnPg==); }}
@@ -105,12 +155,28 @@ class MainWindow(QMainWindow):
                 QLabel.headerLabel {{ font-size: 32px; font-weight: bold; color: #0078d4; }}
                 QLabel#replayTitleLabel {{ font-size: 24px; font-weight: bold; color: #{self.adjust_brightness('1a1a1a', contrast)}; }}
                 QLabel#replayStatsLabel {{ font-size: 18px; color: #{self.adjust_brightness('404040', contrast)}; }}
-                QComboBox, QSpinBox, QTextEdit, QListWidget, QTableWidget {{ background-color: #{self.adjust_brightness('ffffff', contrast)}; color: #{self.adjust_brightness('1a1a1a', contrast)}; border: 1px solid #{self.adjust_brightness('d0d0d0', contrast)}; padding: 12px; border-radius: 5px; font-size: 16px; }}
+                QComboBox, QSpinBox, QTextEdit, QListWidget, QTableWidget, QLineEdit, QDoubleSpinBox, QTabWidget::pane {{ background-color: #{self.adjust_brightness('ffffff', contrast)}; color: #{self.adjust_brightness('1a1a1a', contrast)}; border: 1px solid #{self.adjust_brightness('d0d0d0', contrast)}; padding: 12px; border-radius: 5px; font-size: 16px; }}
+                QTabWidget::tab-bar {{ alignment: center; }}
+                QTabBar::tab {{
+                    background: #{self.adjust_brightness('f0f0f0', contrast)};
+                    color: #{self.adjust_brightness('505050', contrast)};
+                    border: 1px solid #{self.adjust_brightness('d0d0d0', contrast)};
+                    border-bottom: none;
+                    padding: 10px 25px;
+                    border-top-left-radius: 5px;
+                    border-top-right-radius: 5px;
+                }}
+                QTabBar::tab:selected {{
+                    background: #{self.adjust_brightness('ffffff', contrast)};
+                    color: #{self.adjust_brightness('1a1a1a', contrast)};
+                }}
                 QComboBox QAbstractItemView {{
                     border: 1px solid #{self.adjust_brightness('d0d0d0', contrast)};
                     selection-background-color: #{self.adjust_brightness('0078d4', contrast)};
                 }}
                 QListWidget::item {{ padding: 5px; }}
+                QListWidget::item:hover {{ background-color: #{self.adjust_brightness('e0e0e0', contrast)}; }}
+                QListWidget::item:selected {{ background-color: #{self.adjust_brightness('0078d4', contrast)}; color: white; }}
                 QListWidget::indicator {{ width: 18px; height: 18px; border-radius: 4px; }}
                 QListWidget::indicator:unchecked {{ border: 1px solid #999999; background-color: #ffffff; }}
                 QListWidget::indicator:checked {{ border: 1px solid #0078d4; background-color: #0078d4; image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iI2ZmZmZmZiIgZD0iTTkgMTYuMTdMNC44MyAxMmwtMS40MSAxLjQxTDkgMTkgMjEgN2wtMS40MS0xLjQxeiIvPjwvc3ZnPg==); }}
@@ -177,11 +243,14 @@ class MainWindow(QMainWindow):
         self.current_jumper_index = 0
         self.current_round = 1
         self.selected_jumper, self.selected_hill, self.ani = None, None, None
+        self.jumper_edit_widgets = {}
+        self.hill_edit_widgets = {}
 
         self._create_main_menu()
         self._create_sim_type_menu()
         self._create_single_jump_page()
         self._create_competition_page()
+        self._create_data_editor_page()
         self._create_description_page()
         self._create_settings_page()
         self._create_jump_replay_page()
@@ -198,6 +267,10 @@ class MainWindow(QMainWindow):
         btn_sim.clicked.connect(
             lambda: [self.play_sound(), self.central_widget.setCurrentIndex(self.SIM_TYPE_MENU_IDX)])
         layout.addWidget(btn_sim)
+        btn_editor = QPushButton("Edytor Danych")
+        btn_editor.clicked.connect(
+            lambda: [self.play_sound(), self.central_widget.setCurrentIndex(self.DATA_EDITOR_IDX)])
+        layout.addWidget(btn_editor)
         btn_desc = QPushButton("Opis Projektu")
         btn_desc.clicked.connect(lambda: [self.play_sound(), self.central_widget.setCurrentIndex(self.DESCRIPTION_IDX)])
         layout.addWidget(btn_desc)
@@ -330,6 +403,365 @@ class MainWindow(QMainWindow):
         main_hbox.addLayout(results_vbox, 2)
         layout.addLayout(main_hbox)
         self.central_widget.addWidget(widget)
+
+    def _create_data_editor_page(self):
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(20)
+        layout.setContentsMargins(50, 20, 50, 50)
+        layout.addLayout(self._create_top_bar("Edytor Danych", self.MAIN_MENU_IDX))
+
+        main_hbox = QHBoxLayout()
+        layout.addLayout(main_hbox, 1)
+
+        # Left panel (Selection)
+        left_panel = QVBoxLayout()
+        left_panel.setSpacing(10)
+
+        self.editor_tab_widget = QTabWidget()
+
+        # Jumper list
+        jumper_tab = QWidget()
+        jumper_tab_layout = QVBoxLayout(jumper_tab)
+        jumper_tab_layout.setContentsMargins(0, 0, 0, 0)
+        self.editor_jumper_list = QListWidget()
+        jumper_tab_layout.addWidget(self.editor_jumper_list)
+        self.editor_tab_widget.addTab(jumper_tab, "Skoczkowie")
+
+        # Hill list
+        hill_tab = QWidget()
+        hill_tab_layout = QVBoxLayout(hill_tab)
+        hill_tab_layout.setContentsMargins(0, 0, 0, 0)
+        self.editor_hill_list = QListWidget()
+        hill_tab_layout.addWidget(self.editor_hill_list)
+        self.editor_tab_widget.addTab(hill_tab, "Skocznie")
+
+        # Populate lists
+        for jumper in self.all_jumpers:
+            item = QListWidgetItem(self.create_rounded_flag_icon(jumper.nationality), str(jumper))
+            item.setData(Qt.UserRole, jumper)
+            self.editor_jumper_list.addItem(item)
+        self.editor_jumper_list.currentItemChanged.connect(self._populate_editor_form)
+
+        for hill in self.all_hills:
+            item = QListWidgetItem(self.create_rounded_flag_icon(hill.country), str(hill))
+            item.setData(Qt.UserRole, hill)
+            self.editor_hill_list.addItem(item)
+        self.editor_hill_list.currentItemChanged.connect(self._populate_editor_form)
+
+        left_panel.addWidget(self.editor_tab_widget)
+
+        # Add/Delete buttons
+        editor_button_layout = QHBoxLayout()
+        self.add_button = QPushButton("+ Dodaj / Klonuj")
+        self.delete_button = QPushButton("- Usuń zaznaczone")
+        editor_button_layout.addWidget(self.add_button)
+        editor_button_layout.addWidget(self.delete_button)
+        left_panel.addLayout(editor_button_layout)
+
+        self.add_button.clicked.connect(self._add_new_item)
+        self.delete_button.clicked.connect(self._delete_selected_item)
+
+        main_hbox.addLayout(left_panel, 1)
+
+        # Right panel (Form)
+        right_panel = QVBoxLayout()
+
+        self.editor_placeholder_label = QLabel("Wybierz obiekt z listy po lewej, aby edytować jego właściwości.")
+        self.editor_placeholder_label.setAlignment(Qt.AlignCenter)
+        self.editor_placeholder_label.setWordWrap(True)
+
+        jumper_form_scroll = QScrollArea()
+        jumper_form_scroll.setWidgetResizable(True)
+        jumper_form_widget = QWidget()
+        jumper_form_layout = QFormLayout(jumper_form_widget)
+        jumper_form_layout.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
+        self.jumper_edit_widgets = self._create_editor_fields(Jumper, jumper_form_layout)
+        jumper_form_scroll.setWidget(jumper_form_widget)
+
+        hill_form_scroll = QScrollArea()
+        hill_form_scroll.setWidgetResizable(True)
+        hill_form_widget = QWidget()
+        hill_form_layout = QFormLayout(hill_form_widget)
+        hill_form_layout.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
+        self.hill_edit_widgets = self._create_editor_fields(Hill, hill_form_layout)
+        hill_form_scroll.setWidget(hill_form_widget)
+
+        self.editor_form_stack = QStackedWidget()
+        self.editor_form_stack.addWidget(self.editor_placeholder_label)
+        self.editor_form_stack.addWidget(jumper_form_scroll)
+        self.editor_form_stack.addWidget(hill_form_scroll)
+
+        right_panel.addWidget(self.editor_form_stack, 1)
+
+        form_button_layout = QHBoxLayout()
+        apply_button = QPushButton("Zastosuj zmiany")
+        apply_button.clicked.connect(self._save_current_edit)
+        save_to_file_button = QPushButton("Zapisz wszystko do pliku...")
+        save_to_file_button.clicked.connect(self._save_data_to_json)
+
+        form_button_layout.addWidget(apply_button)
+        form_button_layout.addWidget(save_to_file_button)
+        right_panel.addLayout(form_button_layout)
+
+        main_hbox.addLayout(right_panel, 2)
+
+        self.central_widget.addWidget(widget)
+
+    def _create_editor_fields(self, data_class, form_layout):
+        widgets = {}
+        attributes = data_class.__init__.__code__.co_varnames[1:]
+
+        hill_numeric_attrs = ['e1', 'e2', 't', 'r1', 'h', 'n', 's', 'l1', 'l2', 'a_finish', 'P', 'K', 'L', 'Zu']
+
+        for attr in attributes:
+            if attr.startswith('_'):
+                continue
+
+            widget = None
+            if 'coefficient' in attr or 'area' in attr or 'mass' in attr or 'height' in attr or attr in hill_numeric_attrs:
+                widget = NonScrollableDoubleSpinBox()
+                widget.setRange(-10000.0, 10000.0)
+                widget.setDecimals(4)
+                widget.setSingleStep(0.01)
+            elif 'deg' in attr or 'force' in attr:
+                widget = NonScrollableDoubleSpinBox()
+                widget.setRange(-10000.0, 10000.0)
+                widget.setDecimals(2)
+            elif 'gates' in attr:
+                widget = NonScrollableSpinBox()
+                widget.setRange(1, 100)
+            else:
+                widget = QLineEdit()
+
+            label_text = attr.replace('_', ' ').replace('deg', '(deg)').capitalize() + ':'
+            form_layout.addRow(label_text, widget)
+            widgets[attr] = widget
+        return widgets
+
+    def _add_new_item(self):
+        self.play_sound()
+        current_tab_index = self.editor_tab_widget.currentIndex()
+
+        if current_tab_index == 0:  # Skoczkowie
+            new_jumper = Jumper(name="Nowy", last_name="Skoczek", nationality="POL")
+            self.all_jumpers.append(new_jumper)
+
+            item = QListWidgetItem(self.create_rounded_flag_icon(new_jumper.nationality), str(new_jumper))
+            item.setData(Qt.UserRole, new_jumper)
+            self.editor_jumper_list.addItem(item)
+            self.editor_jumper_list.setCurrentItem(item)
+            self.editor_jumper_list.scrollToItem(item, QListWidget.ScrollHint.PositionAtCenter)
+
+        elif current_tab_index == 1:  # Skocznie
+            selected_item = self.editor_hill_list.currentItem()
+            if not selected_item:
+                QMessageBox.information(self, "Informacja", "Aby sklonować skocznię, najpierw zaznacz ją na liście.")
+                return
+
+            hill_to_clone = selected_item.data(Qt.UserRole)
+            new_hill = copy.deepcopy(hill_to_clone)
+            new_hill.name = f"{hill_to_clone.name} (Kopia)"
+
+            self.all_hills.append(new_hill)
+
+            item = QListWidgetItem(self.create_rounded_flag_icon(new_hill.country), str(new_hill))
+            item.setData(Qt.UserRole, new_hill)
+            self.editor_hill_list.addItem(item)
+            self.editor_hill_list.setCurrentItem(item)
+            self.editor_hill_list.scrollToItem(item, QListWidget.ScrollHint.PositionAtCenter)
+
+        self._refresh_all_data_widgets()
+
+    def _delete_selected_item(self):
+        self.play_sound()
+        current_tab_index = self.editor_tab_widget.currentIndex()
+        active_list = self.editor_jumper_list if current_tab_index == 0 else self.editor_hill_list
+
+        current_item = active_list.currentItem()
+        if not current_item:
+            QMessageBox.warning(self, "Błąd", "Nie zaznaczono żadnego elementu do usunięcia.")
+            return
+
+        data_obj = current_item.data(Qt.UserRole)
+
+        reply = QMessageBox.question(self, "Potwierdzenie usunięcia",
+                                     f"Czy na pewno chcesz usunąć '{str(data_obj)}'?\nTej operacji nie można cofnąć.",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                     QMessageBox.StandardButton.No)
+
+        if reply == QMessageBox.StandardButton.Yes:
+            row = active_list.row(current_item)
+            active_list.takeItem(row)
+
+            if isinstance(data_obj, Jumper):
+                self.all_jumpers.remove(data_obj)
+            elif isinstance(data_obj, Hill):
+                self.all_hills.remove(data_obj)
+
+            del data_obj
+            self._refresh_all_data_widgets()
+            self._populate_editor_form()
+            QMessageBox.information(self, "Usunięto", "Wybrany element został usunięty.")
+
+    def _populate_editor_form(self, current_item=None, previous_item=None):
+        active_list_widget = self.editor_tab_widget.currentWidget()
+        if isinstance(active_list_widget, QListWidget):
+            current_item = active_list_widget.currentItem()
+        else:
+            current_item = self.editor_jumper_list.currentItem() if self.editor_tab_widget.currentIndex() == 0 else self.editor_hill_list.currentItem()
+
+        if not current_item:
+            self.editor_form_stack.setCurrentIndex(0)
+            return
+
+        data_obj = current_item.data(Qt.UserRole)
+        widgets = {}
+        if isinstance(data_obj, Jumper):
+            self.editor_form_stack.setCurrentIndex(1)
+            widgets = self.jumper_edit_widgets
+        elif isinstance(data_obj, Hill):
+            self.editor_form_stack.setCurrentIndex(2)
+            widgets = self.hill_edit_widgets
+        else:
+            return
+
+        for attr, widget in widgets.items():
+            if not hasattr(data_obj, attr):
+                continue
+
+            value = getattr(data_obj, attr)
+
+            try:
+                if isinstance(widget, QLineEdit):
+                    widget.setText(str(value) if value is not None else "")
+                elif isinstance(widget, (QDoubleSpinBox, QSpinBox)):
+                    if value is None:
+                        widget.setValue(0)
+                    else:
+                        widget.setValue(float(value))
+            except (ValueError, TypeError) as e:
+                print(f"Błąd podczas wypełniania pola dla '{attr}': {e}. Ustawiono wartość domyślną.")
+                if isinstance(widget, QLineEdit):
+                    widget.clear()
+                else:
+                    widget.setValue(0)
+
+    def _save_current_edit(self):
+        self.play_sound()
+        active_list_widget = self.editor_tab_widget.currentWidget()
+        if not isinstance(active_list_widget, QListWidget):
+            active_list_widget = self.editor_jumper_list if self.editor_tab_widget.currentIndex() == 0 else self.editor_hill_list
+
+        current_item = active_list_widget.currentItem()
+        if not current_item:
+            QMessageBox.warning(self, "Błąd", "Nie wybrano żadnego elementu do zapisania.")
+            return
+
+        data_obj = current_item.data(Qt.UserRole)
+        widgets = {}
+        if isinstance(data_obj, Jumper):
+            widgets = self.jumper_edit_widgets
+        elif isinstance(data_obj, Hill):
+            widgets = self.hill_edit_widgets
+
+        for attr, widget in widgets.items():
+            if not hasattr(data_obj, attr):
+                continue
+
+            try:
+                if isinstance(widget, QLineEdit):
+                    new_value = widget.text()
+                    setattr(data_obj, attr, new_value)
+                elif isinstance(widget, QDoubleSpinBox):
+                    new_value = widget.value()
+                    setattr(data_obj, attr, new_value)
+                elif isinstance(widget, QSpinBox):
+                    new_value = widget.value()
+                    setattr(data_obj, attr, new_value)
+            except Exception as e:
+                print(f"Nie udało się zapisać atrybutu '{attr}': {e}")
+
+        # Update item text in the list
+        current_item.setText(str(data_obj))
+        if hasattr(data_obj, 'country'):
+            current_item.setIcon(self.create_rounded_flag_icon(data_obj.country))
+        elif hasattr(data_obj, 'nationality'):
+            current_item.setIcon(self.create_rounded_flag_icon(data_obj.nationality))
+
+        self._refresh_all_data_widgets()
+
+        QMessageBox.information(self, "Sukces", f"Zmiany dla '{str(data_obj)}' zostały zastosowane w aplikacji.")
+
+    def _save_data_to_json(self):
+        self.play_sound()
+        data_dir = resource_path("data")
+        default_path = os.path.join(data_dir, "data.json")
+
+        filePath, _ = QFileDialog.getSaveFileName(self, "Zapisz plik danych", default_path, "JSON Files (*.json)")
+
+        if not filePath:
+            return
+
+        try:
+            data_to_save = {
+                "hills": [h.to_dict() for h in self.all_hills],
+                "jumpers": [j.to_dict() for j in self.all_jumpers]
+            }
+            with open(filePath, 'w', encoding='utf-8') as f:
+                json.dump(data_to_save, f, ensure_ascii=False, indent=4)
+
+            QMessageBox.information(self, "Sukces", f"Dane zostały pomyślnie zapisane do pliku:\n{filePath}")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Błąd zapisu", f"Nie udało się zapisać pliku.\nBłąd: {e}")
+
+    def _refresh_all_data_widgets(self):
+        # Store selections
+        sel_jumper_text = ""
+        if self.jumper_combo.currentIndex() > -1: sel_jumper_text = self.jumper_combo.currentText()
+
+        sel_hill_text = ""
+        if self.hill_combo.currentIndex() > -1: sel_hill_text = self.hill_combo.currentText()
+
+        sel_comp_hill_text = ""
+        if self.comp_hill_combo.currentIndex() > -1: sel_comp_hill_text = self.comp_hill_combo.currentText()
+
+        # Re-sort lists
+        self.all_jumpers.sort(key=lambda jumper: str(jumper))
+        self.all_hills.sort(key=lambda hill: str(hill))
+
+        # Clear and repopulate all widgets
+        # Single Jump
+        self.jumper_combo.clear()
+        self.jumper_combo.addItem("Wybierz zawodnika")
+        for jumper in self.all_jumpers:
+            self.jumper_combo.addItem(self.create_rounded_flag_icon(jumper.nationality), str(jumper))
+
+        self.hill_combo.clear()
+        self.hill_combo.addItem("Wybierz skocznię")
+        for hill in self.all_hills:
+            self.hill_combo.addItem(self.create_rounded_flag_icon(hill.country), str(hill))
+
+        # Competition
+        self.comp_hill_combo.clear()
+        self.comp_hill_combo.addItem("Wybierz skocznię")
+        for hill in self.all_hills:
+            self.comp_hill_combo.addItem(self.create_rounded_flag_icon(hill.country), str(hill))
+
+        self.jumper_list_widget.clear()
+        for jumper in self.all_jumpers:
+            item = QListWidgetItem(self.create_rounded_flag_icon(jumper.nationality), str(jumper))
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            item.setCheckState(Qt.Unchecked)
+            item.setData(Qt.UserRole, jumper)
+            self.jumper_list_widget.addItem(item)
+        self._sort_jumper_list(self.sort_combo.currentText())
+
+        # Restore selections if possible
+        self.jumper_combo.setCurrentText(sel_jumper_text)
+        self.hill_combo.setCurrentText(sel_hill_text)
+        self.comp_hill_combo.setCurrentText(sel_comp_hill_text)
 
     def _create_jump_replay_page(self):
         widget = QWidget()
@@ -645,18 +1077,24 @@ class MainWindow(QMainWindow):
         return f"{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
 
     def update_jumper(self):
-        self.selected_jumper = self.all_jumpers[
-            self.jumper_combo.currentIndex() - 1] if self.jumper_combo.currentIndex() > 0 else None
+        if self.jumper_combo.currentIndex() > 0:
+            self.selected_jumper = self.all_jumpers[self.jumper_combo.currentIndex() - 1]
+        else:
+            self.selected_jumper = None
 
     def update_hill(self):
-        self.selected_hill = self.all_hills[
-            self.hill_combo.currentIndex() - 1] if self.hill_combo.currentIndex() > 0 else None
-        if self.selected_hill: self.gate_spin.setMaximum(self.selected_hill.gates)
+        if self.hill_combo.currentIndex() > 0:
+            self.selected_hill = self.all_hills[self.hill_combo.currentIndex() - 1]
+            if self.selected_hill: self.gate_spin.setMaximum(self.selected_hill.gates)
+        else:
+            self.selected_hill = None
 
     def update_competition_hill(self):
-        hill = self.all_hills[
-            self.comp_hill_combo.currentIndex() - 1] if self.comp_hill_combo.currentIndex() > 0 else None
-        if hill: self.comp_gate_spin.setMaximum(hill.gates)
+        if self.comp_hill_combo.currentIndex() > 0:
+            hill = self.all_hills[self.comp_hill_combo.currentIndex() - 1]
+            if hill: self.comp_gate_spin.setMaximum(hill.gates)
+        else:
+            hill = None
 
     def clear_results(self):
         self.jumper_combo.setCurrentIndex(0)
@@ -772,6 +1210,14 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(150, self._process_next_jumper)
 
     def _update_competition_table(self):
+        # Sort results before displaying
+        if self.current_round == 1 and self.current_jumper_index > 0:
+            # In round 1, sort by first distance
+            self.competition_results.sort(key=lambda x: x.get('d1', 0), reverse=True)
+        elif self.current_round == 2:
+            # In round 2, sort by total distance
+            self.competition_results.sort(key=lambda x: (x.get('d1', 0) + x.get('d2', 0)), reverse=True)
+
         self.results_table.setRowCount(len(self.competition_results))
         for i, res in enumerate(self.competition_results):
             jumper = res["jumper"]

@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                                QStackedWidget, QSlider, QListWidget, QListWidgetItem,
                                QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox,
                                QFormLayout, QScrollArea, QDoubleSpinBox, QLineEdit, QTabWidget,
-                               QFileDialog, QProxyStyle, QStyle)
+                               QFileDialog, QProxyStyle, QStyle, QGroupBox)
 from PySide6.QtCore import Qt, QUrl, QTimer, QSize
 from PySide6.QtGui import QIcon, QPixmap, QImage
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
@@ -33,7 +33,7 @@ class CustomProxyStyle(QProxyStyle):
 
     def styleHint(self, hint, option=None, widget=None, returnData=None):
         if hint == QStyle.StyleHint.SH_ToolTip_WakeUpDelay:
-            return 100  # Czas w milisekundach (0.1s)
+            return 100
         return super().styleHint(hint, option, widget, returnData)
 
 
@@ -123,6 +123,19 @@ class MainWindow(QMainWindow):
                     border-radius: 5px;
                     font-size: 14px;
                 }}
+                QGroupBox {{
+                    font-size: 16px;
+                    font-weight: bold;
+                    color: #{self.adjust_brightness('b0b0b0', contrast)};
+                    border: 1px solid #{self.adjust_brightness('4a4a4a', contrast)};
+                    border-radius: 8px;
+                    margin-top: 10px;
+                }}
+                QGroupBox::title {{
+                    subcontrol-origin: margin;
+                    subcontrol-position: top center;
+                    padding: 0 10px;
+                }}
                 QTabWidget::tab-bar {{ alignment: center; }}
                 QTabBar::tab {{
                     background: #{self.adjust_brightness('2a2a2a', contrast)};
@@ -183,6 +196,19 @@ class MainWindow(QMainWindow):
                     padding: 8px;
                     border-radius: 5px;
                     font-size: 14px;
+                }}
+                QGroupBox {{
+                    font-size: 16px;
+                    font-weight: bold;
+                    color: #{self.adjust_brightness('404040', contrast)};
+                    border: 1px solid #{self.adjust_brightness('d0d0d0', contrast)};
+                    border-radius: 8px;
+                    margin-top: 10px;
+                }}
+                QGroupBox::title {{
+                    subcontrol-origin: margin;
+                    subcontrol-position: top center;
+                    padding: 0 10px;
                 }}
                 QTabWidget::tab-bar {{ alignment: center; }}
                 QTabBar::tab {{
@@ -505,19 +531,15 @@ class MainWindow(QMainWindow):
 
         jumper_form_scroll = QScrollArea()
         jumper_form_scroll.setWidgetResizable(True)
-        jumper_form_widget = QWidget()
-        jumper_form_layout = QFormLayout(jumper_form_widget)
-        jumper_form_layout.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
-        self.jumper_edit_widgets = self._create_editor_fields(Jumper, jumper_form_layout)
-        jumper_form_scroll.setWidget(jumper_form_widget)
+        self.jumper_form_widget = QWidget()  # Zmieniono na atrybut klasy
+        self.jumper_edit_widgets = self._create_editor_form_content(self.jumper_form_widget, Jumper)
+        jumper_form_scroll.setWidget(self.jumper_form_widget)
 
         hill_form_scroll = QScrollArea()
         hill_form_scroll.setWidgetResizable(True)
-        hill_form_widget = QWidget()
-        hill_form_layout = QFormLayout(hill_form_widget)
-        hill_form_layout.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
-        self.hill_edit_widgets = self._create_editor_fields(Hill, hill_form_layout)
-        hill_form_scroll.setWidget(hill_form_widget)
+        self.hill_form_widget = QWidget()  # Zmieniono na atrybut klasy
+        self.hill_edit_widgets = self._create_editor_form_content(self.hill_form_widget, Hill)
+        hill_form_scroll.setWidget(self.hill_form_widget)
 
         self.editor_form_stack = QStackedWidget()
         self.editor_form_stack.addWidget(self.editor_placeholder_label)
@@ -540,11 +562,30 @@ class MainWindow(QMainWindow):
 
         self.central_widget.addWidget(widget)
 
-    def _create_editor_fields(self, data_class, form_layout):
+    def _create_editor_form_content(self, parent_widget, data_class):
+        # Definicje grup dla skoczka
+        jumper_groups = {
+            "Dane Podstawowe": ["name", "last_name", "nationality", "mass", "height"],
+            "Fizyka Najazdu": ["inrun_drag_coefficient", "inrun_frontal_area", "inrun_lift_coefficient"],
+            "Fizyka Odbicia": ["takeoff_drag_coefficient", "takeoff_frontal_area", "takeoff_lift_coefficient",
+                               "jump_force"],
+            "Fizyka Lotu": ["flight_drag_coefficient", "flight_frontal_area", "flight_lift_coefficient"],
+            "Fizyka Lądowania": ["landing_drag_coefficient", "landing_frontal_area", "landing_lift_coefficient"]
+        }
+        # Definicje grup dla skoczni
+        hill_groups = {
+            "Dane Podstawowe": ["name", "country", "K", "L", "gates"],
+            "Geometria Najazdu": ["e1", "e2", "t", "gamma_deg", "alpha_deg", "r1"],
+            "Profil Zeskoku": ["h", "n", "s", "P", "l1", "l2", "a_finish", "beta_deg", "betaP_deg", "betaL_deg", "Zu"],
+            "Parametry Fizyczne": ["inrun_friction_coefficient"]
+        }
+
+        groups = jumper_groups if data_class == Jumper else hill_groups
+        all_attributes_in_groups = [attr for group in groups.values() for attr in group]
+
         jumper_tooltips = {
-            "name": "Imię zawodnika.",
-            "last_name": "Nazwisko zawodnika.",
-            "nationality": "Kod kraju (np. PL, DE, NO). Wpływa na wyświetlaną flagę.",
+            "name": "Imię zawodnika.", "last_name": "Nazwisko zawodnika.",
+            "nationality": "Kod kraju (np. POL, GER, NOR). Wpływa na wyświetlaną flagę.",
             "mass": "Masa skoczka w kilogramach. Wpływa na bezwładność i przyspieszenie.",
             "height": "Wzrost skoczka w metrach (np. 1.75).",
             "inrun_drag_coefficient": "Współczynnik oporu aerodynamicznego na najeździe. Wyższe wartości = niższa prędkość na progu.",
@@ -561,10 +602,9 @@ class MainWindow(QMainWindow):
             "landing_frontal_area": "Powierzchnia czołowa podczas lądowania (największa).",
             "landing_lift_coefficient": "Siła nośna podczas lądowania (zazwyczaj 0)."
         }
-
         hill_tooltips = {
             "name": "Oficjalna nazwa skoczni.",
-            "country": "Kod kraju (np. PL, DE, NO). Wpływa na wyświetlaną flagę.",
+            "country": "Kod kraju (np. POL, GER, NOR). Wpływa na wyświetlaną flagę.",
             "gates": "Całkowita liczba belek startowych dostępnych na skoczni.",
             "e1": "Długość najazdu od najwyższej belki do progu (w metrach).",
             "e2": "Długość najazdu od najniższej belki do progu (w metrach).",
@@ -584,44 +624,55 @@ class MainWindow(QMainWindow):
             "betaP_deg": "Kąt nachylenia zeskoku w punkcie P w stopniach.",
             "beta_deg": "Kąt nachylenia zeskoku w punkcie K w stopniach.",
             "betaL_deg": "Kąt nachylenia zeskoku w punkcie L w stopniach.",
-            "Zu": "Wysokość progu nad pełnym wypłaszczeniem zeskoku (w metrach).",
-            "s": "Wysokość progu nad zeskokiem."
+            "Zu": "Wysokość progu nad pełnym wypłaszczeniem zeskoku (w metrach).", "s": "Wysokość progu nad zeskokiem."
         }
 
         tooltips = jumper_tooltips if data_class == Jumper else hill_tooltips
         widgets = {}
-        attributes = data_class.__init__.__code__.co_varnames[1:]
-        hill_numeric_attrs = ['e1', 'e2', 't', 'r1', 'h', 'n', 's', 'l1', 'l2', 'a_finish', 'P', 'Zu']
+        main_layout = QVBoxLayout(parent_widget)
 
-        for attr in attributes:
-            if attr.startswith('_'):
-                continue
+        for group_title, attributes in groups.items():
+            group_box = QGroupBox(group_title)
+            form_layout = QFormLayout(group_box)
 
-            widget = None
-            if attr in ['K', 'L', 'gates']:
-                widget = NonScrollableSpinBox()
-                widget.setRange(0, 500)
-            elif 'coefficient' in attr or 'area' in attr or 'mass' in attr or 'height' in attr or attr in hill_numeric_attrs:
-                widget = NonScrollableDoubleSpinBox()
-                widget.setRange(-10000.0, 10000.0)
-                widget.setDecimals(4)
-                widget.setSingleStep(0.01)
-            elif 'deg' in attr or 'force' in attr:
-                widget = NonScrollableDoubleSpinBox()
-                widget.setRange(-10000.0, 10000.0)
-                widget.setDecimals(2)
-            else:
-                widget = QLineEdit()
+            for attr in attributes:
+                widget = None
+                if attr in ['K', 'L', 'gates']:
+                    widget = NonScrollableSpinBox()
+                    widget.setRange(0, 500)
+                elif 'coefficient' in attr or 'area' in attr or 'mass' in attr or 'height' in attr or attr in ['e1',
+                                                                                                               'e2',
+                                                                                                               't',
+                                                                                                               'r1',
+                                                                                                               'h', 'n',
+                                                                                                               's',
+                                                                                                               'l1',
+                                                                                                               'l2',
+                                                                                                               'a_finish',
+                                                                                                               'P',
+                                                                                                               'Zu']:
+                    widget = NonScrollableDoubleSpinBox()
+                    widget.setRange(-10000.0, 10000.0)
+                    widget.setDecimals(4)
+                    widget.setSingleStep(0.01)
+                elif 'deg' in attr or 'force' in attr:
+                    widget = NonScrollableDoubleSpinBox()
+                    widget.setRange(-10000.0, 10000.0)
+                    widget.setDecimals(2)
+                else:
+                    widget = QLineEdit()
 
-            label_text = attr.replace('_', ' ').replace('deg', '(deg)').capitalize() + ':'
+                label_text = attr.replace('_', ' ').replace('deg', '(deg)').capitalize() + ':'
 
-            label_widget = QLabel(label_text)
-            tooltip_text = tooltips.get(attr, "")
-            if tooltip_text:
-                label_widget.setToolTip(tooltip_text)
+                label_widget = QLabel(label_text)
+                label_widget.setToolTip(tooltips.get(attr, ""))
 
-            form_layout.addRow(label_widget, widget)
-            widgets[attr] = widget
+                form_layout.addRow(label_widget, widget)
+                widgets[attr] = widget
+
+            main_layout.addWidget(group_box)
+
+        main_layout.addStretch()
         return widgets
 
     def _filter_editor_lists(self):

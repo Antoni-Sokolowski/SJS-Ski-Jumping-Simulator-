@@ -128,7 +128,7 @@ class MainWindow(QMainWindow):
                 QListWidget::item:selected {{ background-color: #{self.adjust_brightness('005ea6', contrast)}; }}
                 QListWidget::indicator {{ width: 18px; height: 18px; border-radius: 4px; }}
                 QListWidget::indicator:unchecked {{ border: 1px solid #777777; background-color: #2a2a2a; }}
-                QListWidget::indicator:checked {{ border: 1px solid #0078d4; background-color: #0078d4; image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iI2ZmZmZmZiIgZD0iTTkgMTYuMTdMNC44MyAxMmwtMS40MSAxLjQxTDkgMTkgMjEgN2wtMS40MS0xLjQxeiIvPjwvc3ZnPg==); }}
+                QListWidget::indicator:checked {{ border: 1px solid #0078d4; background-color: #0078d4; image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iI2ZmZmZmZiIgZD0iTTkgMTYuMTdMNC48MyAxMmwtMS40MSAxLjQxTDkgMTkgMjEgN2wtMS40MS0xLjQxeiIvPjwvc3ZnPg==); }}
                 QTableWidget::item {{ padding-left: 5px; }}
                 QTableWidget::item:hover {{ background-color: #{self.adjust_brightness('005ea6', contrast)}; }}
                 QHeaderView::section {{ background-color: #{self.adjust_brightness('3a3a3a', contrast)}; color: #{self.adjust_brightness('ffffff', contrast)}; padding: 8px; border: 1px solid #{self.adjust_brightness('4a4a4a', contrast)}; }}
@@ -418,9 +418,21 @@ class MainWindow(QMainWindow):
         left_panel = QVBoxLayout()
         left_panel.setSpacing(10)
 
+        editor_sort_layout = QHBoxLayout()
+        editor_sort_layout.addWidget(QLabel("Sortuj:"))
+        self.editor_sort_combo = QComboBox()
+        self.editor_sort_combo.addItems(["Alfabetycznie (A-Z)", "Wg Kraju (A-Z)"])
+        editor_sort_layout.addWidget(self.editor_sort_combo)
+        left_panel.addLayout(editor_sort_layout)
+
+        # --- NOWE POLE WYSZUKIWANIA ---
+        self.editor_search_bar = QLineEdit()
+        self.editor_search_bar.setPlaceholderText("🔍 Szukaj...")
+        left_panel.addWidget(self.editor_search_bar)
+        # -----------------------------
+
         self.editor_tab_widget = QTabWidget()
 
-        # Jumper list
         jumper_tab = QWidget()
         jumper_tab_layout = QVBoxLayout(jumper_tab)
         jumper_tab_layout.setContentsMargins(0, 0, 0, 0)
@@ -428,7 +440,6 @@ class MainWindow(QMainWindow):
         jumper_tab_layout.addWidget(self.editor_jumper_list)
         self.editor_tab_widget.addTab(jumper_tab, "Skoczkowie")
 
-        # Hill list
         hill_tab = QWidget()
         hill_tab_layout = QVBoxLayout(hill_tab)
         hill_tab_layout.setContentsMargins(0, 0, 0, 0)
@@ -436,22 +447,17 @@ class MainWindow(QMainWindow):
         hill_tab_layout.addWidget(self.editor_hill_list)
         self.editor_tab_widget.addTab(hill_tab, "Skocznie")
 
-        # Populate lists
-        for jumper in self.all_jumpers:
-            item = QListWidgetItem(self.create_rounded_flag_icon(jumper.nationality), str(jumper))
-            item.setData(Qt.UserRole, jumper)
-            self.editor_jumper_list.addItem(item)
-        self.editor_jumper_list.currentItemChanged.connect(self._populate_editor_form)
+        self._repopulate_editor_lists()
 
-        for hill in self.all_hills:
-            item = QListWidgetItem(self.create_rounded_flag_icon(hill.country), str(hill))
-            item.setData(Qt.UserRole, hill)
-            self.editor_hill_list.addItem(item)
+        self.editor_jumper_list.currentItemChanged.connect(self._populate_editor_form)
         self.editor_hill_list.currentItemChanged.connect(self._populate_editor_form)
+
+        self.editor_sort_combo.currentTextChanged.connect(self._sort_editor_lists)
+        self.editor_tab_widget.currentChanged.connect(self._filter_editor_lists)
+        self.editor_search_bar.textChanged.connect(self._filter_editor_lists)
 
         left_panel.addWidget(self.editor_tab_widget)
 
-        # Add/Delete buttons
         editor_button_layout = QHBoxLayout()
         self.add_button = QPushButton("+ Dodaj / Klonuj")
         self.delete_button = QPushButton("- Usuń zaznaczone")
@@ -512,14 +518,17 @@ class MainWindow(QMainWindow):
         widgets = {}
         attributes = data_class.__init__.__code__.co_varnames[1:]
 
-        hill_numeric_attrs = ['e1', 'e2', 't', 'r1', 'h', 'n', 's', 'l1', 'l2', 'a_finish', 'P', 'K', 'L', 'Zu']
+        hill_numeric_attrs = ['e1', 'e2', 't', 'r1', 'h', 'n', 's', 'l1', 'l2', 'a_finish', 'P', 'Zu']
 
         for attr in attributes:
             if attr.startswith('_'):
                 continue
 
             widget = None
-            if 'coefficient' in attr or 'area' in attr or 'mass' in attr or 'height' in attr or attr in hill_numeric_attrs:
+            if attr in ['K', 'L', 'gates']:
+                widget = NonScrollableSpinBox()
+                widget.setRange(0, 500)
+            elif 'coefficient' in attr or 'area' in attr or 'mass' in attr or 'height' in attr or attr in hill_numeric_attrs:
                 widget = NonScrollableDoubleSpinBox()
                 widget.setRange(-10000.0, 10000.0)
                 widget.setDecimals(4)
@@ -528,9 +537,6 @@ class MainWindow(QMainWindow):
                 widget = NonScrollableDoubleSpinBox()
                 widget.setRange(-10000.0, 10000.0)
                 widget.setDecimals(2)
-            elif 'gates' in attr:
-                widget = NonScrollableSpinBox()
-                widget.setRange(1, 100)
             else:
                 widget = QLineEdit()
 
@@ -538,6 +544,75 @@ class MainWindow(QMainWindow):
             form_layout.addRow(label_text, widget)
             widgets[attr] = widget
         return widgets
+
+    def _filter_editor_lists(self):
+        search_text = self.editor_search_bar.text().lower().strip()
+
+        current_tab_index = self.editor_tab_widget.currentIndex()
+        active_list = self.editor_jumper_list if current_tab_index == 0 else self.editor_hill_list
+
+        for i in range(active_list.count()):
+            item = active_list.item(i)
+            item_text = item.text().lower()
+
+            if search_text in item_text:
+                item.setHidden(False)
+            else:
+                item.setHidden(True)
+
+    def _repopulate_editor_lists(self):
+        current_jumper = self.editor_jumper_list.currentItem().data(
+            Qt.UserRole) if self.editor_jumper_list.currentItem() else None
+        current_hill = self.editor_hill_list.currentItem().data(
+            Qt.UserRole) if self.editor_hill_list.currentItem() else None
+
+        self.editor_jumper_list.clear()
+        for jumper in self.all_jumpers:
+            item = QListWidgetItem(self.create_rounded_flag_icon(jumper.nationality), str(jumper))
+            item.setData(Qt.UserRole, jumper)
+            self.editor_jumper_list.addItem(item)
+            if jumper == current_jumper:
+                self.editor_jumper_list.setCurrentItem(item)
+
+        self.editor_hill_list.clear()
+        for hill in self.all_hills:
+            item = QListWidgetItem(self.create_rounded_flag_icon(hill.country), str(hill))
+            item.setData(Qt.UserRole, hill)
+            self.editor_hill_list.addItem(item)
+            if hill == current_hill:
+                self.editor_hill_list.setCurrentItem(item)
+
+        self._sort_editor_lists()
+
+    def _sort_editor_lists(self):
+        current_tab_index = self.editor_tab_widget.currentIndex()
+        list_widget = self.editor_jumper_list if current_tab_index == 0 else self.editor_hill_list
+
+        current_item_data = list_widget.currentItem().data(Qt.UserRole) if list_widget.currentItem() else None
+
+        items_data = [list_widget.item(i).data(Qt.UserRole) for i in range(list_widget.count())]
+
+        sort_text = self.editor_sort_combo.currentText()
+        if "Wg Kraju" in sort_text:
+            items_data.sort(key=lambda x: (getattr(x, 'nationality', '') or getattr(x, 'country', ''), str(x)))
+        else:
+            items_data.sort(key=lambda x: str(x))
+
+        list_widget.clear()
+        new_selection = None
+        for data_obj in items_data:
+            icon = self.create_rounded_flag_icon(
+                getattr(data_obj, 'nationality', None) or getattr(data_obj, 'country', None))
+            item = QListWidgetItem(icon, str(data_obj))
+            item.setData(Qt.UserRole, data_obj)
+            list_widget.addItem(item)
+            if current_item_data and data_obj == current_item_data:
+                new_selection = item
+
+        if new_selection:
+            list_widget.setCurrentItem(new_selection)
+
+        self._filter_editor_lists()  # Zastosuj filtr po sortowaniu
 
     def _add_new_item(self):
         self.play_sound()
@@ -550,8 +625,13 @@ class MainWindow(QMainWindow):
             item = QListWidgetItem(self.create_rounded_flag_icon(new_jumper.nationality), str(new_jumper))
             item.setData(Qt.UserRole, new_jumper)
             self.editor_jumper_list.addItem(item)
-            self.editor_jumper_list.setCurrentItem(item)
-            self.editor_jumper_list.scrollToItem(item, QListWidget.ScrollHint.PositionAtCenter)
+            self._sort_editor_lists()
+            for i in range(self.editor_jumper_list.count()):
+                if self.editor_jumper_list.item(i).data(Qt.UserRole) == new_jumper:
+                    self.editor_jumper_list.setCurrentRow(i)
+                    self.editor_jumper_list.scrollToItem(self.editor_jumper_list.item(i),
+                                                         QListWidget.ScrollHint.PositionAtCenter)
+                    break
 
         elif current_tab_index == 1:  # Skocznie
             selected_item = self.editor_hill_list.currentItem()
@@ -568,8 +648,13 @@ class MainWindow(QMainWindow):
             item = QListWidgetItem(self.create_rounded_flag_icon(new_hill.country), str(new_hill))
             item.setData(Qt.UserRole, new_hill)
             self.editor_hill_list.addItem(item)
-            self.editor_hill_list.setCurrentItem(item)
-            self.editor_hill_list.scrollToItem(item, QListWidget.ScrollHint.PositionAtCenter)
+            self._sort_editor_lists()
+            for i in range(self.editor_hill_list.count()):
+                if self.editor_hill_list.item(i).data(Qt.UserRole) == new_hill:
+                    self.editor_hill_list.setCurrentRow(i)
+                    self.editor_hill_list.scrollToItem(self.editor_hill_list.item(i),
+                                                       QListWidget.ScrollHint.PositionAtCenter)
+                    break
 
         self._refresh_all_data_widgets()
 
@@ -649,9 +734,8 @@ class MainWindow(QMainWindow):
 
     def _save_current_edit(self):
         self.play_sound()
-        active_list_widget = self.editor_tab_widget.currentWidget()
-        if not isinstance(active_list_widget, QListWidget):
-            active_list_widget = self.editor_jumper_list if self.editor_tab_widget.currentIndex() == 0 else self.editor_hill_list
+        current_tab_index = self.editor_tab_widget.currentIndex()
+        active_list_widget = self.editor_jumper_list if current_tab_index == 0 else self.editor_hill_list
 
         current_item = active_list_widget.currentItem()
         if not current_item:
@@ -682,7 +766,9 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 print(f"Nie udało się zapisać atrybutu '{attr}': {e}")
 
-        # Update item text in the list
+        if isinstance(data_obj, Hill):
+            data_obj.recalculate_derived_attributes()
+
         current_item.setText(str(data_obj))
         if hasattr(data_obj, 'country'):
             current_item.setIcon(self.create_rounded_flag_icon(data_obj.country))
@@ -717,7 +803,6 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Błąd zapisu", f"Nie udało się zapisać pliku.\nBłąd: {e}")
 
     def _refresh_all_data_widgets(self):
-        # Store selections
         sel_jumper_text = ""
         if self.jumper_combo.currentIndex() > -1: sel_jumper_text = self.jumper_combo.currentText()
 
@@ -727,12 +812,9 @@ class MainWindow(QMainWindow):
         sel_comp_hill_text = ""
         if self.comp_hill_combo.currentIndex() > -1: sel_comp_hill_text = self.comp_hill_combo.currentText()
 
-        # Re-sort lists
         self.all_jumpers.sort(key=lambda jumper: str(jumper))
         self.all_hills.sort(key=lambda hill: str(hill))
 
-        # Clear and repopulate all widgets
-        # Single Jump
         self.jumper_combo.clear()
         self.jumper_combo.addItem("Wybierz zawodnika")
         for jumper in self.all_jumpers:
@@ -743,7 +825,6 @@ class MainWindow(QMainWindow):
         for hill in self.all_hills:
             self.hill_combo.addItem(self.create_rounded_flag_icon(hill.country), str(hill))
 
-        # Competition
         self.comp_hill_combo.clear()
         self.comp_hill_combo.addItem("Wybierz skocznię")
         for hill in self.all_hills:
@@ -758,10 +839,11 @@ class MainWindow(QMainWindow):
             self.jumper_list_widget.addItem(item)
         self._sort_jumper_list(self.sort_combo.currentText())
 
-        # Restore selections if possible
         self.jumper_combo.setCurrentText(sel_jumper_text)
         self.hill_combo.setCurrentText(sel_hill_text)
         self.comp_hill_combo.setCurrentText(sel_comp_hill_text)
+
+        self._repopulate_editor_lists()
 
     def _create_jump_replay_page(self):
         widget = QWidget()
@@ -938,6 +1020,21 @@ class MainWindow(QMainWindow):
     def _calculate_trajectory(self, jumper, hill, gate):
         inrun_velocity = inrun_simulation(hill, jumper, gate_number=gate)
 
+        base_cl = jumper.flight_lift_coefficient
+        effective_cl = base_cl
+
+        baseline_velocity_ms = 24.5
+        max_bonus_velocity_ms = 28.5
+
+        if inrun_velocity > baseline_velocity_ms:
+            max_lift_bonus = 0.12
+
+            velocity_factor = (inrun_velocity - baseline_velocity_ms) / (max_bonus_velocity_ms - baseline_velocity_ms)
+            velocity_factor = min(1.0, max(0.0, velocity_factor))
+
+            lift_bonus = max_lift_bonus * velocity_factor
+            effective_cl = base_cl + lift_bonus
+
         positions = [(0, 0)]
         current_position_x, current_position_y = 0, 0
         initial_total_velocity = inrun_velocity
@@ -967,7 +1064,7 @@ class MainWindow(QMainWindow):
             force_g_y = -jumper.mass * 9.81
 
             c_d = jumper.flight_drag_coefficient
-            c_l = jumper.flight_lift_coefficient
+            c_l = effective_cl
             area = jumper.flight_frontal_area
 
             force_drag_magnitude = 0.5 * 1.225 * c_d * area * total_velocity ** 2

@@ -1,5 +1,3 @@
-#src/jumper.py
-
 '''Klasa skoczek'''
 
 class Jumper:
@@ -57,3 +55,26 @@ class Jumper:
 
     def __str__(self):
         return f'{self.name} {self.last_name}'
+
+    def to_dict(self):
+        """Konwertuje obiekt Jumper do słownika w celu serializacji do JSON."""
+        return {
+            "name": self.name,
+            "last_name": self.last_name,
+            "nationality": self.nationality,
+            "mass": self.mass,
+            "height": self.height,
+            "inrun_drag_coefficient": self.inrun_drag_coefficient,
+            "inrun_frontal_area": self.inrun_frontal_area,
+            "inrun_lift_coefficient": self.inrun_lift_coefficient,
+            "takeoff_drag_coefficient": self.takeoff_drag_coefficient,
+            "takeoff_frontal_area": self.takeoff_frontal_area,
+            "takeoff_lift_coefficient": self.takeoff_lift_coefficient,
+            "jump_force": self.jump_force,
+            "flight_drag_coefficient": self.flight_drag_coefficient,
+            "flight_frontal_area": self.flight_frontal_area,
+            "flight_lift_coefficient": self.flight_lift_coefficient,
+            "landing_drag_coefficient": self.landing_drag_coefficient,
+            "landing_frontal_area": self.landing_frontal_area,
+            "landing_lift_coefficient": self.landing_lift_coefficient
+        }

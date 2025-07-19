@@ -39,7 +39,6 @@ def load_data_from_json():
 
         return hills, jumpers
 
-    # --- POPRAWKA: Zamiast print(), pokazujemy okno błędu ---
     except Exception as e:
         title = "Błąd Krytyczny - Nie można wczytać danych"
         message = (

@@ -10,8 +10,8 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                                QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox,
                                QFormLayout, QScrollArea, QDoubleSpinBox, QLineEdit, QTabWidget,
                                QFileDialog, QProxyStyle, QStyle, QGroupBox)
-from PySide6.QtCore import Qt, QUrl, QTimer, QSize
-from PySide6.QtGui import QIcon, QPixmap, QImage
+from PySide6.QtCore import Qt, QUrl, QTimer, QSize, QRect, QPoint
+from PySide6.QtGui import QIcon, QPixmap, QImage, QPainter, QPolygon, QColor
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -24,7 +24,86 @@ from src.hill import Hill
 from src.jumper import Jumper
 
 
-# --- NOWE KLASY WIDGETÓW I STYLU ---
+def create_arrow_pixmap(direction, color):
+    """Tworzy pixmapę ze strzałką (trójkątem) o danym kolorze."""
+    pixmap = QPixmap(10, 10)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor(color))
+    if direction == "up":
+        points = [QPoint(5, 2), QPoint(2, 7), QPoint(8, 7)]
+    else:  # down
+        points = [QPoint(5, 8), QPoint(2, 3), QPoint(8, 3)]
+    painter.drawPolygon(QPolygon(points))
+    painter.end()
+    return pixmap
+
+
+class CustomSpinBox(QSpinBox):
+    """
+    Niestandardowy SpinBox z własnymi przyciskami, gwarantujący
+    poprawny wygląd i blokadę scrolla.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.up_button = QPushButton(self)
+        self.down_button = QPushButton(self)
+
+        self.up_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.down_button.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        self.up_button.clicked.connect(self.stepUp)
+        self.down_button.clicked.connect(self.stepDown)
+
+    def set_button_icons(self, up_icon, down_icon):
+        self.up_button.setIcon(up_icon)
+        self.down_button.setIcon(down_icon)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        button_width = 25
+        self.up_button.setGeometry(self.width() - button_width, 0, button_width, self.height() // 2)
+        self.down_button.setGeometry(self.width() - button_width, self.height() // 2, button_width, self.height() // 2)
+
+    def wheelEvent(self, event):
+        event.ignore()
+
+
+class CustomDoubleSpinBox(QDoubleSpinBox):
+    """
+    Niestandardowy DoubleSpinBox z własnymi przyciskami, gwarantujący
+    poprawny wygląd i blokadę scrolla.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.up_button = QPushButton(self)
+        self.down_button = QPushButton(self)
+
+        self.up_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.down_button.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        self.up_button.clicked.connect(self.stepUp)
+        self.down_button.clicked.connect(self.stepDown)
+
+    def set_button_icons(self, up_icon, down_icon):
+        self.up_button.setIcon(up_icon)
+        self.down_button.setIcon(down_icon)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        button_width = 25
+        self.up_button.setGeometry(self.width() - button_width, 0, button_width, self.height() // 2)
+        self.down_button.setGeometry(self.width() - button_width, self.height() // 2, button_width, self.height() // 2)
+
+    def wheelEvent(self, event):
+        event.ignore()
+
 
 class CustomProxyStyle(QProxyStyle):
     """
@@ -36,34 +115,6 @@ class CustomProxyStyle(QProxyStyle):
             return 100
         return super().styleHint(hint, option, widget, returnData)
 
-
-class NonScrollableDoubleSpinBox(QDoubleSpinBox):
-    """
-    Niestandardowy DoubleSpinBox, który ignoruje kółko myszy,
-    chyba że pole jest aktywne (ma focus).
-    """
-
-    def wheelEvent(self, event):
-        if self.hasFocus():
-            super().wheelEvent(event)
-        else:
-            event.ignore()
-
-
-class NonScrollableSpinBox(QSpinBox):
-    """
-    Niestandardowy SpinBox, który ignoruje kółko myszy,
-    chyba że pole jest aktywne (ma focus).
-    """
-
-    def wheelEvent(self, event):
-        if self.hasFocus():
-            super().wheelEvent(event)
-        else:
-            event.ignore()
-
-
-# --- KONIEC NOWYCH KLAS ---
 
 def resource_path(relative_path):
     """
@@ -102,6 +153,11 @@ class MainWindow(QMainWindow):
         self.contrast_level = 1.0
         self.volume_level = 0.3
 
+        self.up_arrow_icon_dark = QIcon(create_arrow_pixmap("up", "#b0b0b0"))
+        self.down_arrow_icon_dark = QIcon(create_arrow_pixmap("down", "#b0b0b0"))
+        self.up_arrow_icon_light = QIcon(create_arrow_pixmap("up", "#404040"))
+        self.down_arrow_icon_light = QIcon(create_arrow_pixmap("down", "#404040"))
+
         self.themes = {
             "dark": lambda contrast: f"""
                 QMainWindow, QWidget {{ background-color: #{self.adjust_brightness('1a1a1a', contrast)}; }}
@@ -136,6 +192,17 @@ class MainWindow(QMainWindow):
                     subcontrol-position: top center;
                     padding: 0 10px;
                 }}
+                QDoubleSpinBox, QSpinBox {{ padding-right: 25px; }}
+                QDoubleSpinBox::up-button, QSpinBox::up-button, QDoubleSpinBox::down-button, QSpinBox::down-button {{
+                    width: 0px; border: none;
+                }}
+                CustomSpinBox > QPushButton, CustomDoubleSpinBox > QPushButton {{
+                    background-color: transparent; border: none;
+                }}
+                CustomSpinBox > QPushButton:hover, CustomDoubleSpinBox > QPushButton:hover {{
+                    background-color: #{self.adjust_brightness('3f3f3f', contrast)};
+                }}
+
                 QTabWidget::tab-bar {{ alignment: center; }}
                 QTabBar::tab {{
                     background: #{self.adjust_brightness('2a2a2a', contrast)};
@@ -209,6 +276,16 @@ class MainWindow(QMainWindow):
                     subcontrol-origin: margin;
                     subcontrol-position: top center;
                     padding: 0 10px;
+                }}
+                QDoubleSpinBox, QSpinBox {{ padding-right: 25px; }}
+                QDoubleSpinBox::up-button, QSpinBox::up-button, QDoubleSpinBox::down-button, QSpinBox::down-button {{
+                    width: 0px; border: none;
+                }}
+                CustomSpinBox > QPushButton, CustomDoubleSpinBox > QPushButton {{
+                    background-color: transparent; border: none;
+                }}
+                CustomSpinBox > QPushButton:hover, CustomDoubleSpinBox > QPushButton:hover {{
+                    background-color: #{self.adjust_brightness('e0e0e0', contrast)};
                 }}
                 QTabWidget::tab-bar {{ alignment: center; }}
                 QTabBar::tab {{
@@ -531,13 +608,13 @@ class MainWindow(QMainWindow):
 
         jumper_form_scroll = QScrollArea()
         jumper_form_scroll.setWidgetResizable(True)
-        self.jumper_form_widget = QWidget()  # Zmieniono na atrybut klasy
+        self.jumper_form_widget = QWidget()
         self.jumper_edit_widgets = self._create_editor_form_content(self.jumper_form_widget, Jumper)
         jumper_form_scroll.setWidget(self.jumper_form_widget)
 
         hill_form_scroll = QScrollArea()
         hill_form_scroll.setWidgetResizable(True)
-        self.hill_form_widget = QWidget()  # Zmieniono na atrybut klasy
+        self.hill_form_widget = QWidget()
         self.hill_edit_widgets = self._create_editor_form_content(self.hill_form_widget, Hill)
         hill_form_scroll.setWidget(self.hill_form_widget)
 
@@ -563,7 +640,6 @@ class MainWindow(QMainWindow):
         self.central_widget.addWidget(widget)
 
     def _create_editor_form_content(self, parent_widget, data_class):
-        # Definicje grup dla skoczka
         jumper_groups = {
             "Dane Podstawowe": ["name", "last_name", "nationality", "mass", "height"],
             "Fizyka Najazdu": ["inrun_drag_coefficient", "inrun_frontal_area", "inrun_lift_coefficient"],
@@ -572,7 +648,6 @@ class MainWindow(QMainWindow):
             "Fizyka Lotu": ["flight_drag_coefficient", "flight_frontal_area", "flight_lift_coefficient"],
             "Fizyka Lądowania": ["landing_drag_coefficient", "landing_frontal_area", "landing_lift_coefficient"]
         }
-        # Definicje grup dla skoczni
         hill_groups = {
             "Dane Podstawowe": ["name", "country", "K", "L", "gates"],
             "Geometria Najazdu": ["e1", "e2", "t", "gamma_deg", "alpha_deg", "r1"],
@@ -581,8 +656,6 @@ class MainWindow(QMainWindow):
         }
 
         groups = jumper_groups if data_class == Jumper else hill_groups
-        all_attributes_in_groups = [attr for group in groups.values() for attr in group]
-
         jumper_tooltips = {
             "name": "Imię zawodnika.", "last_name": "Nazwisko zawodnika.",
             "nationality": "Kod kraju (np. POL, GER, NOR). Wpływa na wyświetlaną flagę.",
@@ -637,9 +710,12 @@ class MainWindow(QMainWindow):
 
             for attr in attributes:
                 widget = None
-                if attr in ['K', 'L', 'gates']:
-                    widget = NonScrollableSpinBox()
-                    widget.setRange(0, 500)
+                if attr in ['K', 'L', 'gates', 'jump_force']:
+                    widget = CustomSpinBox()
+                    if attr == 'jump_force':
+                        widget.setRange(0, 3000)
+                    else:
+                        widget.setRange(0, 500)
                 elif 'coefficient' in attr or 'area' in attr or 'mass' in attr or 'height' in attr or attr in ['e1',
                                                                                                                'e2',
                                                                                                                't',
@@ -651,16 +727,23 @@ class MainWindow(QMainWindow):
                                                                                                                'a_finish',
                                                                                                                'P',
                                                                                                                'Zu']:
-                    widget = NonScrollableDoubleSpinBox()
+                    widget = CustomDoubleSpinBox()
                     widget.setRange(-10000.0, 10000.0)
                     widget.setDecimals(4)
                     widget.setSingleStep(0.01)
-                elif 'deg' in attr or 'force' in attr:
-                    widget = NonScrollableDoubleSpinBox()
+                elif 'deg' in attr:
+                    widget = CustomDoubleSpinBox()
                     widget.setRange(-10000.0, 10000.0)
                     widget.setDecimals(2)
                 else:
                     widget = QLineEdit()
+
+                # Ustawienie ikon w zależności od motywu
+                if isinstance(widget, (CustomSpinBox, CustomDoubleSpinBox)):
+                    if self.current_theme == "dark":
+                        widget.set_button_icons(self.up_arrow_icon_dark, self.down_arrow_icon_dark)
+                    else:
+                        widget.set_button_icons(self.up_arrow_icon_light, self.down_arrow_icon_light)
 
                 label_text = attr.replace('_', ' ').replace('deg', '(deg)').capitalize() + ':'
 
@@ -847,6 +930,7 @@ class MainWindow(QMainWindow):
 
             value = getattr(data_obj, attr)
 
+            widget.blockSignals(True)
             try:
                 if isinstance(widget, QLineEdit):
                     widget.setText(str(value) if value is not None else "")
@@ -861,6 +945,8 @@ class MainWindow(QMainWindow):
                     widget.clear()
                 else:
                     widget.setValue(0)
+            finally:
+                widget.blockSignals(False)
 
     def _save_current_edit(self):
         self.play_sound()
@@ -1018,22 +1104,43 @@ class MainWindow(QMainWindow):
         layout.setSpacing(40)
         layout.setContentsMargins(50, 20, 50, 50)
         layout.addLayout(self._create_top_bar("Ustawienia", self.MAIN_MENU_IDX))
+
         self.theme_combo = QComboBox()
         self.theme_combo.addItems(["Ciemny", "Jasny"])
         self.theme_combo.currentTextChanged.connect(self.change_theme)
         layout.addLayout(self._create_form_row("Motyw:", self.theme_combo))
+
+        self.window_mode_combo = QComboBox()
+        self.window_mode_combo.addItems(["W oknie", "Pełny ekran w oknie", "Pełny ekran"])
+        self.window_mode_combo.setCurrentText("Pełny ekran w oknie")
+        self.window_mode_combo.currentTextChanged.connect(self._change_window_mode)
+        layout.addLayout(self._create_form_row("Tryb okna:", self.window_mode_combo))
+
+        contrast_label = QLabel("Kontrast:")
         self.contrast_slider = QSlider(Qt.Horizontal)
         self.contrast_slider.setRange(50, 150)
         self.contrast_slider.setValue(100)
         self.contrast_slider.valueChanged.connect(self.change_contrast)
-        layout.addLayout(self._create_form_row("Kontrast:", self.contrast_slider))
+        self.contrast_slider.sliderReleased.connect(self.update_styles)
+        layout.addLayout(self._create_form_row(contrast_label.text(), self.contrast_slider))
+
+        volume_label = QLabel("Głośność:")
         self.volume_slider = QSlider(Qt.Horizontal)
         self.volume_slider.setRange(0, 100)
         self.volume_slider.setValue(int(self.volume_level * 100))
         self.volume_slider.valueChanged.connect(self.change_volume)
-        layout.addLayout(self._create_form_row("Głośność:", self.volume_slider))
+        layout.addLayout(self._create_form_row(volume_label.text(), self.volume_slider))
+
         layout.addStretch()
         self.central_widget.addWidget(widget)
+
+    def _change_window_mode(self, mode):
+        if mode == "Pełny ekran":
+            self.showFullScreen()
+        elif mode == "Pełny ekran w oknie":
+            self.showMaximized()
+        else:  # "W oknie"
+            self.showNormal()
 
     def _create_top_bar(self, title_text, back_index):
         top_bar = QHBoxLayout()
@@ -1495,7 +1602,6 @@ class MainWindow(QMainWindow):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
 
-    # Ustawiamy niestandardowy styl, aby przyspieszyć podpowiedzi
     app.setStyle(CustomProxyStyle())
 
     window = MainWindow()

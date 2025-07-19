@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                                QStackedWidget, QSlider, QListWidget, QListWidgetItem,
                                QTableWidget, QTableWidgetItem, QHeaderView, QMessageBox,
                                QFormLayout, QScrollArea, QDoubleSpinBox, QLineEdit, QTabWidget,
-                               QFileDialog)
+                               QFileDialog, QProxyStyle, QStyle)
 from PySide6.QtCore import Qt, QUrl, QTimer, QSize
 from PySide6.QtGui import QIcon, QPixmap, QImage
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
@@ -24,7 +24,19 @@ from src.hill import Hill
 from src.jumper import Jumper
 
 
-# --- NOWE KLASY WIDGETÓW BLOKUJĄCE PRZYPADKOWE SCROLLOWANIE ---
+# --- NOWE KLASY WIDGETÓW I STYLU ---
+
+class CustomProxyStyle(QProxyStyle):
+    """
+    Niestandardowy styl, który nadpisuje domyślny czas wyświetlania podpowiedzi.
+    """
+
+    def styleHint(self, hint, option=None, widget=None, returnData=None):
+        if hint == QStyle.StyleHint.SH_ToolTip_WakeUpDelay:
+            return 100  # Czas w milisekundach (0.1s)
+        return super().styleHint(hint, option, widget, returnData)
+
+
 class NonScrollableDoubleSpinBox(QDoubleSpinBox):
     """
     Niestandardowy DoubleSpinBox, który ignoruje kółko myszy,
@@ -103,6 +115,14 @@ class MainWindow(QMainWindow):
                     border: 1px solid #{self.adjust_brightness('4a4a4a', contrast)};
                     padding: 12px; border-radius: 5px; font-size: 16px;
                 }}
+                QToolTip {{
+                    background-color: #{self.adjust_brightness('111111', contrast)};
+                    color: #{self.adjust_brightness('dddddd', contrast)};
+                    border: 1px solid #{self.adjust_brightness('4a4a4a', contrast)};
+                    padding: 8px;
+                    border-radius: 5px;
+                    font-size: 14px;
+                }}
                 QTabWidget::tab-bar {{ alignment: center; }}
                 QTabBar::tab {{
                     background: #{self.adjust_brightness('2a2a2a', contrast)};
@@ -128,7 +148,7 @@ class MainWindow(QMainWindow):
                 QListWidget::item:selected {{ background-color: #{self.adjust_brightness('005ea6', contrast)}; }}
                 QListWidget::indicator {{ width: 18px; height: 18px; border-radius: 4px; }}
                 QListWidget::indicator:unchecked {{ border: 1px solid #777777; background-color: #2a2a2a; }}
-                QListWidget::indicator:checked {{ border: 1px solid #0078d4; background-color: #0078d4; image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iI2ZmZmZmZiIgZD0iTTkgMTYuMTdMNC48MyAxMmwtMS40MSAxLjQxTDkgMTkgMjEgN2wtMS40MS0xLjQxeiIvPjwvc3ZnPg==); }}
+                QListWidget::indicator:checked {{ border: 1px solid #0078d4; background-color: #0078d4; image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iI2ZmZmZmZiIgZD0iTTkgMTYuMTdMNC44MyAxMmwtMS40MSAxLjQxTDkgMTkgMjEgN2wtMS40MS0xLjQxeiIvPjwvc3ZnPg==); }}
                 QTableWidget::item {{ padding-left: 5px; }}
                 QTableWidget::item:hover {{ background-color: #{self.adjust_brightness('005ea6', contrast)}; }}
                 QHeaderView::section {{ background-color: #{self.adjust_brightness('3a3a3a', contrast)}; color: #{self.adjust_brightness('ffffff', contrast)}; padding: 8px; border: 1px solid #{self.adjust_brightness('4a4a4a', contrast)}; }}
@@ -156,6 +176,14 @@ class MainWindow(QMainWindow):
                 QLabel#replayTitleLabel {{ font-size: 24px; font-weight: bold; color: #{self.adjust_brightness('1a1a1a', contrast)}; }}
                 QLabel#replayStatsLabel {{ font-size: 18px; color: #{self.adjust_brightness('404040', contrast)}; }}
                 QComboBox, QSpinBox, QTextEdit, QListWidget, QTableWidget, QLineEdit, QDoubleSpinBox, QTabWidget::pane {{ background-color: #{self.adjust_brightness('ffffff', contrast)}; color: #{self.adjust_brightness('1a1a1a', contrast)}; border: 1px solid #{self.adjust_brightness('d0d0d0', contrast)}; padding: 12px; border-radius: 5px; font-size: 16px; }}
+                QToolTip {{
+                    background-color: #{self.adjust_brightness('ffffff', contrast)};
+                    color: #{self.adjust_brightness('1a1a1a', contrast)};
+                    border: 1px solid #{self.adjust_brightness('c0c0c0', contrast)};
+                    padding: 8px;
+                    border-radius: 5px;
+                    font-size: 14px;
+                }}
                 QTabWidget::tab-bar {{ alignment: center; }}
                 QTabBar::tab {{
                     background: #{self.adjust_brightness('f0f0f0', contrast)};
@@ -425,11 +453,9 @@ class MainWindow(QMainWindow):
         editor_sort_layout.addWidget(self.editor_sort_combo)
         left_panel.addLayout(editor_sort_layout)
 
-        # --- NOWE POLE WYSZUKIWANIA ---
         self.editor_search_bar = QLineEdit()
         self.editor_search_bar.setPlaceholderText("🔍 Szukaj...")
         left_panel.addWidget(self.editor_search_bar)
-        # -----------------------------
 
         self.editor_tab_widget = QTabWidget()
 
@@ -515,9 +541,56 @@ class MainWindow(QMainWindow):
         self.central_widget.addWidget(widget)
 
     def _create_editor_fields(self, data_class, form_layout):
+        jumper_tooltips = {
+            "name": "Imię zawodnika.",
+            "last_name": "Nazwisko zawodnika.",
+            "nationality": "Kod kraju (np. PL, DE, NO). Wpływa na wyświetlaną flagę.",
+            "mass": "Masa skoczka w kilogramach. Wpływa na bezwładność i przyspieszenie.",
+            "height": "Wzrost skoczka w metrach (np. 1.75).",
+            "inrun_drag_coefficient": "Współczynnik oporu aerodynamicznego na najeździe. Wyższe wartości = niższa prędkość na progu.",
+            "inrun_frontal_area": "Powierzchnia czołowa na najeździe. Większa powierzchnia = niższa prędkość na progu.",
+            "inrun_lift_coefficient": "Siła nośna na najeździe (zazwyczaj 0 lub bliska zera).",
+            "takeoff_drag_coefficient": "Opór aerodynamiczny w fazie odbicia (gdy skoczek się prostuje).",
+            "takeoff_frontal_area": "Powierzchnia czołowa w fazie odbicia.",
+            "takeoff_lift_coefficient": "Siła nośna w fazie odbicia (zazwyczaj 0).",
+            "jump_force": "Moc odbicia skoczka. Kluczowy parametr wpływający na parabolę lotu. Typowe wartości: 1400-1800.",
+            "flight_drag_coefficient": "Współczynnik oporu aerodynamicznego w locie. Wyższe wartości = krótsze skoki.",
+            "flight_frontal_area": "Powierzchnia czołowa w locie.",
+            "flight_lift_coefficient": "Współczynnik siły nośnej w locie. Wyższe wartości = dłuższy, bardziej płaski lot. Typowe wartości: 0.6-0.8.",
+            "landing_drag_coefficient": "Opór aerodynamiczny podczas lądowania (bardzo wysoki).",
+            "landing_frontal_area": "Powierzchnia czołowa podczas lądowania (największa).",
+            "landing_lift_coefficient": "Siła nośna podczas lądowania (zazwyczaj 0)."
+        }
+
+        hill_tooltips = {
+            "name": "Oficjalna nazwa skoczni.",
+            "country": "Kod kraju (np. PL, DE, NO). Wpływa na wyświetlaną flagę.",
+            "gates": "Całkowita liczba belek startowych dostępnych na skoczni.",
+            "e1": "Długość najazdu od najwyższej belki do progu (w metrach).",
+            "e2": "Długość najazdu od najniższej belki do progu (w metrach).",
+            "t": "Długość drugiej prostej najadzu (w metrach).",
+            "inrun_friction_coefficient": "Współczynnik tarcia nart o tory. Wyższe wartości = niższa prędkość na progu. Typowo: 0.02.",
+            "P": "Początek strefy lądowania (w metrach).",
+            "K": "Punkt konstrukcyjny skoczni w metrach (np. 90, 120, 200).",
+            "l1": "Odległość po zeskoku między punktem P a K (w metrach).",
+            "l2": "Odległosć po zeskoku między punktem K a L (w metrach).",
+            "a_finish": "Długość całego wypłaszczenia zeskoku (w metrach).",
+            "L": "Rozmiar skoczni (HS) w metrach. Określa granicę bezpiecznego skoku.",
+            "alpha_deg": "Kąt nachylenia progu w stopniach. Kluczowy dla kąta wybicia. Zwykle 10-11 stopni.",
+            "gamma_deg": "Kąt nachylenia górnej, stromej części najazdu w stopniach.",
+            "r1": "Promień krzywej przejściowej na najeździe (w metrach).",
+            "h": "Różnica wysokości między progiem a punktem K.",
+            "n": "Odległość w poziomie między progiem a punktem K.",
+            "betaP_deg": "Kąt nachylenia zeskoku w punkcie P w stopniach.",
+            "beta_deg": "Kąt nachylenia zeskoku w punkcie K w stopniach.",
+            "betaL_deg": "Kąt nachylenia zeskoku w punkcie L w stopniach.",
+            "Zu": "Wysokość progu nad pełnym wypłaszczeniem zeskoku (w metrach).",
+            "s": "Wysokość progu nad zeskokiem."
+        }
+
+        tooltips = jumper_tooltips if data_class == Jumper else hill_tooltips
         widgets = {}
         attributes = data_class.__init__.__code__.co_varnames[1:]
-
         hill_numeric_attrs = ['e1', 'e2', 't', 'r1', 'h', 'n', 's', 'l1', 'l2', 'a_finish', 'P', 'Zu']
 
         for attr in attributes:
@@ -541,7 +614,13 @@ class MainWindow(QMainWindow):
                 widget = QLineEdit()
 
             label_text = attr.replace('_', ' ').replace('deg', '(deg)').capitalize() + ':'
-            form_layout.addRow(label_text, widget)
+
+            label_widget = QLabel(label_text)
+            tooltip_text = tooltips.get(attr, "")
+            if tooltip_text:
+                label_widget.setToolTip(tooltip_text)
+
+            form_layout.addRow(label_widget, widget)
             widgets[attr] = widget
         return widgets
 
@@ -612,7 +691,7 @@ class MainWindow(QMainWindow):
         if new_selection:
             list_widget.setCurrentItem(new_selection)
 
-        self._filter_editor_lists()  # Zastosuj filtr po sortowaniu
+        self._filter_editor_lists()
 
     def _add_new_item(self):
         self.play_sound()
@@ -1364,6 +1443,10 @@ class MainWindow(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+
+    # Ustawiamy niestandardowy styl, aby przyspieszyć podpowiedzi
+    app.setStyle(CustomProxyStyle())
+
     window = MainWindow()
     window.showMaximized()
     window.show()

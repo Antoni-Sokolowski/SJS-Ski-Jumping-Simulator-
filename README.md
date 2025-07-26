@@ -1,171 +1,116 @@
-# SJS (Ski Jumping Simulator)
-
+# Ski Jumping Simulator
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
-SJS is an advanced ski jumping simulator written in Python, utilizing a physics-based model to realistically represent the dynamics of a jumper's flight. The application features a complete graphical user interface built with the PySide6 (Qt for Python) library.
 
-The simulation's data, including jumpers and hills, is loaded from an external `data/data.json` file, allowing users to easily customize and add their own content.
-
-<p align="center">
-  <img src="Images/Simulation_overview.png" alt="SJS Screenshot" width="800"/>
-</p>
+> An advanced ski jumping simulator with realistic flight physics, a competition mode, and a built-in, fully functional editor for hill and jumper data. This project was written in Python using the PySide6 library to create a modern and intuitive graphical user interface.
 
 ---
 
-## Key Features
+## 🚀 Getting Started
 
-* **Two Simulation Modes:**
-    * **Single Jump:** Analyze a single jump by a selected athlete on a chosen hill.
-    * **Competition:** Run a full, two-round competition for a group of selected jumpers, with results updated in real-time.
-* **2D Flight Visualization:** A real-time graphical representation of the jump trajectory, created using `matplotlib`.
-* **External & Editable Data:** The application loads all jumper and hill data from an external `data/data.json` file, making it easy to add, remove, or edit entries.
-* **Customizable UI:** Users can choose between light and dark themes and adjust the interface contrast and volume.
-* **Interactive Options:** Ability to select the start gate, dynamically sort the jumper list, and view distance-based results.
+### 🎮 For Players (Recommended Method)
 
----
+The easiest way to run the simulator is to download a pre-built version from the **Releases** section.
 
-## Technology Stack
+1.  Navigate to the [**Releases tab**](https://github.com/Antoni-Sokolowski/SJS-Ski-Jumping-Simulator-/releases) on the right side of this page.
+2.  Download the asset from the latest release, e.g., `Ski.Jumping.Simulator.v1.3.zip`.
+3.  Unzip the archive to any folder on your computer.
+4.  Run the `SkiJumpingSimulator.exe` executable. Enjoy!
 
-* **Language:** Python 3
-* **GUI Framework:** PySide6 (Qt for Python)
-* **Data Visualization:** Matplotlib
-* **Numerical Computing:** NumPy
-* **Scientific Computing:** SciPy
-* **Image Manipulation:** Pillow (for creating rounded flag icons)
-* **Packaging:** PyInstaller
+### 👨‍💻 For Developers (Running from Source)
 
----
-
-## Installation and Usage
-
-There are two ways to run the simulator.
-
-### 1. For Users (Recommended)
-
-This method is the easiest and does not require a Python installation.
-
-1.  Navigate to the **[Releases](https://github.com/Antoni-Sokolowski/SJS_Simulator/releases)** section of this repository.
-2.  Download the latest `.zip` package (e.g., `SJS_Simulator_v1.0.zip`).
-3.  Unzip the package to a location on your computer.
-4.  Run the application by double-clicking the `SJS_Simulator.exe` file.
-
-**Important:** The `.exe` file must be in the **same folder** as the `data` directory to function correctly.
-
-### 2. For Developers (From Source Code)
-
-This method allows you to view and modify the code.
+If you wish to modify the code or run the project directly from the source files, follow these steps:
 
 **Prerequisites:**
-* Python 3.8+
-* Git
+* Python 3.8+ installed.
 
-**Steps:**
+**Installation:**
 
 1.  **Clone the repository:**
     ```bash
-    git clone [https://github.com/Antoni-Sokolowski/SJS_Simulator.git](https://github.com/Antoni-Sokolowski/SJS_Simulator.git)
-    cd SJS_Simulator
+    git clone [https://github.com/Antoni-Sokolowski/SJS-Ski-Jumping-Simulator-.git](https://github.com/Antoni-Sokolowski/SJS-Ski-Jumping-Simulator-.git)
+    cd SJS-Ski-Jumping-Simulator-
     ```
 
 2.  **Create and activate a virtual environment:**
     ```bash
     # Windows
-    python -m venv .venv
-    .venv\Scripts\activate
+    python -m venv venv
+    .\venv\Scripts\activate
+
+    # macOS / Linux
+    python3 -m venv venv
+    source venv/bin/activate
     ```
 
-3.  **Install the required libraries:**
+3.  **Install dependencies:**
+    (Ensure you have a `requirements.txt` file in the project's root directory)
     ```bash
     pip install -r requirements.txt
     ```
 
-4.  **Run the application:**
-    ```bash
-    python main.py
-    ```
+**Running the App:**
+```bash
+python main.py
+```
 
 ---
 
-## Customization: Adding Jumpers & Hills
+## ✨ Key Features
 
-You can easily customize the simulator by editing the `data/data.json` file. All values should be expressed in base **SI units** (meters, kilograms, seconds).
-
-### Jumper Data
-
-Below is an overview of the available parameters for a jumper and an example of the JSON structure.
-
-<table>
-  <tr>
-    <td valign="top"><img src="Images/Jumper_statistics.png" alt="Jumper Stats" width="400"></td>
-    <td valign="top"><img src="Images/Data2.png" alt="Jumper JSON" width="400"></td>
-  </tr>
-  <tr>
-    <td align="center"><i>Jumper parameters available in the simulator.</i></td>
-    <td align="center"><i>Example of a complete jumper entry in <code>data.json</code>.</i></td>
-  </tr>
-</table>
-
-**Jumper Parameters:**
-
-| Parameter                   | Description                                         | Required |
-| --------------------------- | --------------------------------------------------- |:--------:|
-| `name`                      | First name of the jumper.                           | **Yes** |
-| `last_name`                   | Last name of the jumper.                            | **Yes** |
-| `nationality`               | Jumper's nationality (2-letter country code).     | **Yes** |
-| `mass`                      | Weight of the jumper in kilograms.                  | No       |
-| `height`                    | Height of the jumper in meters.                     | No       |
-| `inrun_drag_coefficient`    | Drag coefficient on the inrun.                      | No       |
-| `inrun_frontal_area`      | Frontal area on the inrun.                          | No       |
-| `takeoff_drag_coefficient`  | Drag coefficient during takeoff.                    | No       |
-| `takeoff_frontal_area`    | Frontal area during takeoff.                        | No       |
-| `jump_force`                | Takeoff force in Newtons.                           | No       |
-| `flight_drag_coefficient`   | Drag coefficient during flight.                     | No       |
-| `flight_frontal_area`     | Frontal area during flight.                         | No       |
-| `flight_lift_coefficient`   | Lift coefficient during flight.                     | No       |
-| `landing_drag_coefficient`  | Drag coefficient during landing.                    | No       |
-| `landing_frontal_area`    | Frontal area during landing.                        | No       |
-| `landing_lift_coefficient`  | Lift coefficient during landing.                    | No       |
-
-*If an optional parameter is not provided, a default value will be used.*
-
-### Hill Data
-
-The hill parameters are based on the official FIS (International Ski and Snowboard Federation) standards for ski jump construction. All parameters are required for the hill to be calculated correctly.
-
-<table>
-  <tr>
-    <td valign="top"><img src="Images/Data3.png" alt="Hill JSON" width="400"></td>
-  </tr>
-  <tr>
-    <td align="center"><i>Example of a complete hill entry in <code>data.json</code>.</i></td>
-  </tr>
-</table>
-
-**Hill Parameters:**
-
-| Parameter                  | Description                                            | Required |
-| -------------------------- | ------------------------------------------------------ |:--------:|
-| `name`                     | Official name of the hill.                             | **Yes** |
-| `country`                  | Country where the hill is located (2-letter code).   | **Yes** |
-| `e1`, `e2`, `gates`        | Inrun parameters (lengths and number of gates).        | **Yes** |
-| `t`, `gamma_deg`, `alpha_deg`, `r1` | Inrun geometry (takeoff table and transition curve). | **Yes** |
-| `h`, `n`, `s`              | Key dimensions (takeoff height, K-point position).     | **Yes** |
-| `betaP_deg`, `beta_deg`, `betaL_deg` | Landing slope angles at points P, K, and L.      | **Yes** |
-| `P`, `K`, `L`              | Key points on the landing profile (P-point, K-point, L-point/HS). | **Yes** |
-| `Zu`                       | Height difference to the lowest point of the outrun.   | **Yes** |
-| `inrun_friction_coefficient` | Friction coefficient of the inrun tracks.              | No       |
-
-For detailed information on these parameters, please refer to the official FIS documentation and homologation lists:
-1.  **[FIS Construction Norms](https://assets.fis-ski.com/f/252177/5ba64e29f2/construction-norm-2018-2.pdf)** (PDF)
-2.  **[FIS Homologated Hills Database](https://www.fis-ski.com/DB/alpine-skiing/homologations.html)**
+* **Two Simulation Modes:**
+    * **Single Jump:** Quickly test any jumper on any hill.
+    * **Competition:** A complete two-round competition mode featuring a final round for the top 30 competitors.
+* **Realistic Physics:**
+    * The simulation accounts for the jumper's mass, inrun friction, takeoff power, as well as lift and drag forces during flight.
+    * A **dynamic lift coefficient** adjusts to the takeoff speed, ensuring realistic distances on both small and large hills.
+* **Visualization & Replays:**
+    * Real-time graphical animation of the jumper's flight trajectory.
+    * The ability to watch a replay of any jump from a competition.
+* **Advanced Data Editor:**
+    * Full editing of **every attribute** for both jumpers and hills.
+    * Add new jumpers from scratch and clone existing hills.
+    * Delete objects from the database.
+    * **User-Friendly Interface:**
+        * Logical **grouping of parameters** into sections (e.g., "Flight Physics," "Inrun Geometry").
+        * Instant **searching** and **sorting** (alphabetically and by country).
+        * Detailed **tooltips** explaining each parameter on hover.
+* **Customization:**
+    * Ability to change the theme (dark/light), contrast, and volume.
+    * Choice of display modes (Windowed, Borderless Fullscreen, Fullscreen).
 
 ---
 
-# THANKS FOR READING
+## 🛠️ Technologies Used
+
+* **Python 3**
+* **PySide6:** Official Qt for Python bindings for building the GUI.
+* **Matplotlib:** For plotting and animating the jump trajectory.
+* **NumPy & SciPy:** For numerical calculations in the physics simulation.
+* **Pillow (PIL):** For image manipulation (rounded flag icons).
+
+---
+## 📸 Screenshots
+
+| Main Menu | Jump Simulation |
+| :---: | :---: |
+|  |  |
+| **Competition** | **Advanced Data Editor** |
+|  |  |
+---
+## 🤝 Contributing
+
+Contributions are what make the open-source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**. To do so, please fork the repository and create a pull request. You can also open an issue with the "enhancement" tag to suggest a new feature.
 
 ---
 
-## License
+## 👨‍💻 Author
 
-This project is licensed under the MIT License. See the `LICENSE` file for more details.
+* **Antoni Sokołowski**
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License. See the `LICENSE.md` file for details.

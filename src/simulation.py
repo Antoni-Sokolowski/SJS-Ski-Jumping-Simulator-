@@ -79,19 +79,35 @@ def inrun_simulation(Hill, Jumper, gate_number=None, time_contact=0.1):
 
 def fly_simulation(Hill, Jumper, gate_number=None, time_contact=0.1):
     current_position_x, current_position_y = 0, 0
-    initial_total_velocity = inrun_simulation(Hill, Jumper, gate_number=gate_number, time_contact=time_contact)
-    initial_velocity_x = initial_total_velocity * math.cos(-Hill.alpha_rad)
-    initial_velocity_y = initial_total_velocity * math.sin(-Hill.alpha_rad)
-    velocity_takeoff = (Jumper.jump_force * time_contact) / Jumper.mass
-    velocity_takeoff_x = velocity_takeoff * math.sin(Hill.alpha_rad)
-    velocity_takeoff_y = velocity_takeoff * math.cos(Hill.alpha_rad)
-    velocity_x_final = initial_velocity_x + velocity_takeoff_x
-    velocity_y_final = initial_velocity_y + velocity_takeoff_y
-    takeoff_angle_rad = math.atan2(velocity_y_final, velocity_x_final)
 
-    v_perpendicular = (Jumper.jump_force * time_contact) / Jumper.mass
-    current_velocity_x = initial_total_velocity * math.cos(takeoff_angle_rad)
-    current_velocity_y = initial_total_velocity * math.sin(takeoff_angle_rad) + v_perpendicular
+    initial_total_velocity = inrun_simulation(Hill, Jumper, gate_number=gate_number, time_contact=time_contact)
+
+    inrun_velocity_x = initial_total_velocity * math.cos(-Hill.alpha_rad)
+    inrun_velocity_y = initial_total_velocity * math.sin(-Hill.alpha_rad)
+
+    delta_v_from_jump = (Jumper.jump_force * time_contact) / Jumper.mass
+    jump_velocity_x = delta_v_from_jump * math.sin(Hill.alpha_rad)
+    jump_velocity_y = delta_v_from_jump * math.cos(Hill.alpha_rad)
+
+    current_velocity_x = inrun_velocity_x + jump_velocity_x
+    current_velocity_y = inrun_velocity_y + jump_velocity_y
+
+    # Obliczanie efektywnej siły nośnej
+    base_cl = Jumper.flight_lift_coefficient
+    effective_cl = base_cl
+
+    baseline_velocity_ms = 24.5
+    max_bonus_velocity_ms = 28.5
+
+    if initial_total_velocity > baseline_velocity_ms:
+        max_lift_bonus = 0.12
+
+        velocity_factor = (initial_total_velocity - baseline_velocity_ms) / (
+                    max_bonus_velocity_ms - baseline_velocity_ms)
+        velocity_factor = min(1.0, max(0.0, velocity_factor))
+
+        lift_bonus = max_lift_bonus * velocity_factor
+        effective_cl = base_cl + lift_bonus
 
     time_step = 0.01
     max_hill_length = Hill.n + Hill.a_finish + 50
@@ -100,14 +116,18 @@ def fly_simulation(Hill, Jumper, gate_number=None, time_contact=0.1):
         total_velocity = math.sqrt(current_velocity_x ** 2 + current_velocity_y ** 2)
         angle_of_flight_rad = math.atan2(current_velocity_y, current_velocity_x)
         force_g_y = -Jumper.mass * GRAVITY
+
         force_drag_magnitude = 0.5 * AIR_DENSITY * Jumper.flight_drag_coefficient * Jumper.flight_frontal_area * total_velocity ** 2
         force_drag_x = -force_drag_magnitude * math.cos(angle_of_flight_rad)
         force_drag_y = -force_drag_magnitude * math.sin(angle_of_flight_rad)
-        force_lift_magnitude = 0.5 * AIR_DENSITY * Jumper.flight_lift_coefficient * Jumper.flight_frontal_area * total_velocity ** 2
+
+        force_lift_magnitude = 0.5 * AIR_DENSITY * effective_cl * Jumper.flight_frontal_area * total_velocity ** 2
         force_lift_x = -force_lift_magnitude * math.sin(angle_of_flight_rad)
         force_lift_y = force_lift_magnitude * math.cos(angle_of_flight_rad)
+
         acceleration_x = (force_drag_x + force_lift_x) / Jumper.mass
         acceleration_y = (force_g_y + force_drag_y + force_lift_y) / Jumper.mass
+
         current_velocity_x += acceleration_x * time_step
         current_velocity_y += acceleration_y * time_step
         current_position_x += current_velocity_x * time_step

@@ -1,10 +1,7 @@
 import json
-import math
 from tqdm import tqdm
-from colorama import init, Fore, Back, Style
+from colorama import init, Fore, Style
 from src.simulation import load_data_from_json, inrun_simulation, fly_simulation
-from src.hill import Hill
-from src.jumper import Jumper
 
 # Initialize colorama for Windows compatibility
 init()

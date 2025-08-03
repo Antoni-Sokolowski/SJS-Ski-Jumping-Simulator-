@@ -5,7 +5,6 @@ Zapewnia synchronizację z GUI main.py i optymalizuje parametry skoczków
 """
 
 import json
-import math
 from tqdm import tqdm
 from colorama import init, Fore, Style
 from src.simulation import load_data_from_json, fly_simulation

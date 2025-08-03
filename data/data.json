@@ -198,7 +198,7 @@
             "K": 125,
             "L": 132,
             "Zu": 85.17,
-            "inrun_friction_coefficient": 0.06
+            "inrun_friction_coefficient": 0.07
         },
         {
             "name": "Courchevel",
@@ -298,7 +298,7 @@
             "K": 98,
             "L": 109,
             "Zu": 68.62,
-            "inrun_friction_coefficient": 0.08
+            "inrun_friction_coefficient": 0.09
         },
         {
             "name": "Engelberg",
@@ -348,7 +348,7 @@
             "K": 120,
             "L": 134,
             "Zu": 80.56,
-            "inrun_friction_coefficient": 0.02
+            "inrun_friction_coefficient": 0.01
         },
         {
             "name": "Frenštát pod Radhoštěm",
@@ -398,7 +398,7 @@
             "K": 125,
             "L": 142,
             "Zu": 87.99,
-            "inrun_friction_coefficient": 0.02
+            "inrun_friction_coefficient": 0.0
         },
         {
             "name": "Garmisch-Partenkirchen",
@@ -423,7 +423,7 @@
             "K": 80,
             "L": 89,
             "Zu": 58.0,
-            "inrun_friction_coefficient": 0.02
+            "inrun_friction_coefficient": 0.01
         },
         {
             "name": "Gerardmer",
@@ -523,7 +523,7 @@
             "K": 90,
             "L": 98,
             "Zu": 65.38,
-            "inrun_friction_coefficient": 0.02
+            "inrun_friction_coefficient": 0.01
         },
         {
             "name": "Harachov",
@@ -548,7 +548,7 @@
             "K": 70,
             "L": 73,
             "Zu": 44.03,
-            "inrun_friction_coefficient": 0.02
+            "inrun_friction_coefficient": 0.0
         },
         {
             "name": "Harachov",
@@ -573,7 +573,7 @@
             "K": 90,
             "L": 100,
             "Zu": 60.45,
-            "inrun_friction_coefficient": 0.08
+            "inrun_friction_coefficient": 0.09
         },
         {
             "name": "Hinterzarten",
@@ -598,7 +598,7 @@
             "K": 70,
             "L": 77,
             "Zu": 48.52,
-            "inrun_friction_coefficient": 0.02
+            "inrun_friction_coefficient": 0.03
         },
         {
             "name": "Hinterzarten",
@@ -648,7 +648,7 @@
             "K": 85,
             "L": 90,
             "Zu": 55.27,
-            "inrun_friction_coefficient": 0.04
+            "inrun_friction_coefficient": 0.03
         },
         {
             "name": "Innsbruck",
@@ -698,7 +698,7 @@
             "K": 119,
             "L": 133,
             "Zu": 84.92,
-            "inrun_friction_coefficient": 0.02
+            "inrun_friction_coefficient": 0.03
         },
         {
             "name": "Kandersteg",
@@ -723,7 +723,7 @@
             "K": 67,
             "L": 74,
             "Zu": 49.88,
-            "inrun_friction_coefficient": 0.06
+            "inrun_friction_coefficient": 0.05
         },
         {
             "name": "Kandersteg",
@@ -798,7 +798,7 @@
             "K": 77,
             "L": 85,
             "Zu": 51.3,
-            "inrun_friction_coefficient": 0.04
+            "inrun_friction_coefficient": 0.05
         },
         {
             "name": "Kranj",
@@ -823,7 +823,7 @@
             "K": 100,
             "L": 109,
             "Zu": 69.94,
-            "inrun_friction_coefficient": 0.04
+            "inrun_friction_coefficient": 0.03
         },
         {
             "name": "Kuusamo",
@@ -848,7 +848,7 @@
             "K": 120,
             "L": 142,
             "Zu": 92.19,
-            "inrun_friction_coefficient": 0.02
+            "inrun_friction_coefficient": 0.0
         },
         {
             "name": "Lahti",
@@ -873,7 +873,7 @@
             "K": 116,
             "L": 130,
             "Zu": 78.23,
-            "inrun_friction_coefficient": 0.02
+            "inrun_friction_coefficient": 0.03
         },
         {
             "name": "Lahti",
@@ -898,7 +898,7 @@
             "K": 90,
             "L": 100,
             "Zu": 62.53,
-            "inrun_friction_coefficient": 0.06
+            "inrun_friction_coefficient": 0.07
         },
         {
             "name": "Lake Placid",
@@ -1048,7 +1048,7 @@
             "K": 85,
             "L": 94,
             "Zu": 58.1,
-            "inrun_friction_coefficient": 0.02
+            "inrun_friction_coefficient": 0.0
         },
         {
             "name": "Notodden",
@@ -1073,7 +1073,7 @@
             "K": 90,
             "L": 98,
             "Zu": 92.3,
-            "inrun_friction_coefficient": 0.04
+            "inrun_friction_coefficient": 0.05
         },
         {
             "name": "Oberhof",
@@ -1148,7 +1148,7 @@
             "K": 90,
             "L": 100,
             "Zu": 68.24,
-            "inrun_friction_coefficient": 0.06
+            "inrun_friction_coefficient": 0.07
         },
         {
             "name": "Oberstdorf",
@@ -1348,7 +1348,7 @@
             "K": 125,
             "L": 138,
             "Zu": 88.0,
-            "inrun_friction_coefficient": 0.04
+            "inrun_friction_coefficient": 0.05
         },
         {
             "name": "Planica",
@@ -1373,7 +1373,7 @@
             "K": 200,
             "L": 240,
             "Zu": 135.0,
-            "inrun_friction_coefficient": 0.12
+            "inrun_friction_coefficient": 0.11
         },
         {
             "name": "Planica",
@@ -1398,7 +1398,7 @@
             "K": 56,
             "L": 61,
             "Zu": 41.2,
-            "inrun_friction_coefficient": 0.02
+            "inrun_friction_coefficient": 0.01
         },
         {
             "name": "Planica",
@@ -1423,7 +1423,7 @@
             "K": 95,
             "L": 102,
             "Zu": 68.73,
-            "inrun_friction_coefficient": 0.04
+            "inrun_friction_coefficient": 0.05
         },
         {
             "name": "Predazzo",
@@ -1448,7 +1448,7 @@
             "K": 60,
             "L": 66,
             "Zu": 44.25,
-            "inrun_friction_coefficient": 0.1
+            "inrun_friction_coefficient": 0.09
         },
         {
             "name": "Pyeongchang",
@@ -1473,7 +1473,7 @@
             "K": 125,
             "L": 142,
             "Zu": 87.97,
-            "inrun_friction_coefficient": 0.02
+            "inrun_friction_coefficient": 0.0
         },
         {
             "name": "Pyeongchang",
@@ -1498,7 +1498,7 @@
             "K": 98,
             "L": 109,
             "Zu": 69.94,
-            "inrun_friction_coefficient": 0.02
+            "inrun_friction_coefficient": 0.03
         },
         {
             "name": "Pöhla",
@@ -1548,7 +1548,7 @@
             "K": 90,
             "L": 98,
             "Zu": 62.0,
-            "inrun_friction_coefficient": 0.02
+            "inrun_friction_coefficient": 0.0
         },
         {
             "name": "Rasnov",
@@ -1598,7 +1598,7 @@
             "K": 64,
             "L": 71,
             "Zu": 43.07,
-            "inrun_friction_coefficient": 0.08
+            "inrun_friction_coefficient": 0.09
         },
         {
             "name": "Rasnov",
@@ -1698,7 +1698,7 @@
             "K": 123,
             "L": 137,
             "Zu": 86.56,
-            "inrun_friction_coefficient": 0.02
+            "inrun_friction_coefficient": 0.03
         },
         {
             "name": "Sapporo",
@@ -1723,7 +1723,7 @@
             "K": 90,
             "L": 100,
             "Zu": 62.59,
-            "inrun_friction_coefficient": 0.04
+            "inrun_friction_coefficient": 0.05
         },
         {
             "name": "Schonach",
@@ -1772,8 +1772,8 @@
             "P": 63.11,
             "K": 68,
             "L": 75,
-            "Zu": 50.0,
-            "inrun_friction_coefficient": 0.02
+            "Zu": 70.0,
+            "inrun_friction_coefficient": 0.0
         },
         {
             "name": "Seefeld",
@@ -1823,7 +1823,7 @@
             "K": 105,
             "L": 115,
             "Zu": 75.36,
-            "inrun_friction_coefficient": 0.04
+            "inrun_friction_coefficient": 0.05
         },
         {
             "name": "Stams",
@@ -1848,7 +1848,7 @@
             "K": 60,
             "L": 66,
             "Zu": 50.0,
-            "inrun_friction_coefficient": 0.02
+            "inrun_friction_coefficient": 0.01
         },
         {
             "name": "Szczyrk",
@@ -1898,7 +1898,7 @@
             "K": 95,
             "L": 104,
             "Zu": 80.0,
-            "inrun_friction_coefficient": 0.02
+            "inrun_friction_coefficient": 0.0
         },
         {
             "name": "Titisee-Neustadt",
@@ -1923,7 +1923,7 @@
             "K": 125,
             "L": 142,
             "Zu": 89.76,
-            "inrun_friction_coefficient": 0.02
+            "inrun_friction_coefficient": 0.01
         },
         {
             "name": "Trondheim",
@@ -1948,7 +1948,7 @@
             "K": 124,
             "L": 138,
             "Zu": 84.06,
-            "inrun_friction_coefficient": 0.06
+            "inrun_friction_coefficient": 0.05
         },
         {
             "name": "Trondheim",
@@ -1973,7 +1973,7 @@
             "K": 94,
             "L": 102,
             "Zu": 65.93,
-            "inrun_friction_coefficient": 0.04
+            "inrun_friction_coefficient": 0.05
         },
         {
             "name": "Tschagguns",
@@ -2048,7 +2048,7 @@
             "K": 67,
             "L": 75,
             "Zu": 48.4,
-            "inrun_friction_coefficient": 0.02
+            "inrun_friction_coefficient": 0.0
         },
         {
             "name": "Vikersund",
@@ -2073,7 +2073,7 @@
             "K": 200,
             "L": 240,
             "Zu": 135.0,
-            "inrun_friction_coefficient": 0.08
+            "inrun_friction_coefficient": 0.07
         },
         {
             "name": "Villach",
@@ -2098,7 +2098,7 @@
             "K": 90,
             "L": 98,
             "Zu": 64.0,
-            "inrun_friction_coefficient": 0.02
+            "inrun_friction_coefficient": 0.01
         },
         {
             "name": "Whistler",
@@ -2198,7 +2198,7 @@
             "K": 120,
             "L": 134,
             "Zu": 80.56,
-            "inrun_friction_coefficient": 0.02
+            "inrun_friction_coefficient": 0.01
         },
         {
             "name": "Zakopane",
@@ -2273,7 +2273,7 @@
             "K": 95,
             "L": 105,
             "Zu": 65.5,
-            "inrun_friction_coefficient": 0.02
+            "inrun_friction_coefficient": 0.03
         },
         {
             "name": "Zao",
@@ -2348,7 +2348,7 @@
             "K": 95,
             "L": 106,
             "Zu": 68.02,
-            "inrun_friction_coefficient": 0.06
+            "inrun_friction_coefficient": 0.07
         }
     ],
     "jumpers": [
@@ -2364,7 +2364,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1917.5824175824177,
+            "jump_force": 1888.8186813186815,
             "flight_drag_coefficient": 0.4317094452622753,
             "flight_frontal_area": 0.5391659599209118,
             "flight_lift_coefficient": 0.9283638922358696,
@@ -2384,7 +2384,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1928.5714285714287,
+            "jump_force": 1899.642857142857,
             "flight_drag_coefficient": 0.4236022256329368,
             "flight_frontal_area": 0.5941828946067191,
             "flight_lift_coefficient": 0.941052237004469,
@@ -2404,7 +2404,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1961.5384615384617,
+            "jump_force": 1932.1153846153848,
             "flight_drag_coefficient": 0.4114413961889291,
             "flight_frontal_area": 0.5391659599209118,
             "flight_lift_coefficient": 0.9621994782854685,
@@ -2424,7 +2424,7 @@
             "takeoff_drag_coefficient": 1.0,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0.0,
-            "jump_force": 1906.5934065934068,
+            "jump_force": 1877.9945054945058,
             "flight_drag_coefficient": 0.430696042808608,
             "flight_frontal_area": 0.4621422513607815,
             "flight_lift_coefficient": 0.9220197198515697,
@@ -2444,7 +2444,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1912.0879120879122,
+            "jump_force": 1883.4065934065934,
             "flight_drag_coefficient": 0.43576305507694457,
             "flight_frontal_area": 0.5501693468580733,
             "flight_lift_coefficient": 0.9072166509548701,
@@ -2464,7 +2464,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 2000,
+            "jump_force": 1970.0,
             "flight_drag_coefficient": 0.40536098146692523,
             "flight_frontal_area": 0.5171591860465888,
             "flight_lift_coefficient": 0.9727730989259681,
@@ -2484,7 +2484,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1912.0879120879122,
+            "jump_force": 1883.4065934065934,
             "flight_drag_coefficient": 0.41752181091093293,
             "flight_frontal_area": 0.5391659599209118,
             "flight_lift_coefficient": 0.9579700300292685,
@@ -2504,7 +2504,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1972.5274725274726,
+            "jump_force": 1942.9395604395604,
             "flight_drag_coefficient": 0.4256290305402714,
             "flight_frontal_area": 0.5831795076695577,
             "flight_lift_coefficient": 0.9283638922358696,
@@ -2524,7 +2524,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1939.5604395604398,
+            "jump_force": 1910.4670329670332,
             "flight_drag_coefficient": 0.4256290305402714,
             "flight_frontal_area": 0.5501693468580733,
             "flight_lift_coefficient": 0.9241344439796696,
@@ -2544,7 +2544,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1989.010989010989,
+            "jump_force": 1959.1758241758241,
             "flight_drag_coefficient": 0.4256290305402714,
             "flight_frontal_area": 0.5281625729837504,
             "flight_lift_coefficient": 0.9674862886057183,
@@ -2564,7 +2564,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1917.5824175824177,
+            "jump_force": 1888.8186813186815,
             "flight_drag_coefficient": 0.43576305507694457,
             "flight_frontal_area": 0.5171591860465888,
             "flight_lift_coefficient": 0.946339047324719,
@@ -2584,7 +2584,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1939.5604395604398,
+            "jump_force": 1910.4670329670332,
             "flight_drag_coefficient": 0.4236022256329368,
             "flight_frontal_area": 0.49515241217226597,
             "flight_lift_coefficient": 0.9199049957234697,
@@ -2604,7 +2604,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1939.5604395604398,
+            "jump_force": 1910.4670329670332,
             "flight_drag_coefficient": 0.43373625016961,
             "flight_frontal_area": 0.5721761207323962,
             "flight_lift_coefficient": 0.9199049957234697,
@@ -2624,7 +2624,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1923.0769230769233,
+            "jump_force": 1894.2307692307695,
             "flight_drag_coefficient": 0.4317094452622753,
             "flight_frontal_area": 0.5831795076695577,
             "flight_lift_coefficient": 0.9051019268267703,
@@ -2644,7 +2644,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1890.1098901098903,
+            "jump_force": 1861.7582417582419,
             "flight_drag_coefficient": 0.4256290305402714,
             "flight_frontal_area": 0.5501693468580733,
             "flight_lift_coefficient": 0.9283638922358696,
@@ -2664,7 +2664,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1925.2747252747254,
+            "jump_force": 1896.3956043956046,
             "flight_drag_coefficient": 0.4256290305402714,
             "flight_frontal_area": 0.5171591860465888,
             "flight_lift_coefficient": 0.9093313750829702,
@@ -2684,7 +2684,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1939.5604395604398,
+            "jump_force": 1910.4670329670332,
             "flight_drag_coefficient": 0.4296826403549407,
             "flight_frontal_area": 0.5831795076695577,
             "flight_lift_coefficient": 0.9114460992110701,
@@ -2704,7 +2704,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1939.5604395604398,
+            "jump_force": 1910.4670329670332,
             "flight_drag_coefficient": 0.4215754207256022,
             "flight_frontal_area": 0.5501693468580733,
             "flight_lift_coefficient": 0.9262491681077697,
@@ -2724,7 +2724,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1898.901098901099,
+            "jump_force": 1870.4175824175825,
             "flight_drag_coefficient": 0.4317094452622753,
             "flight_frontal_area": 0.5501693468580733,
             "flight_lift_coefficient": 0.9199049957234697,
@@ -2744,7 +2744,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1923.0769230769233,
+            "jump_force": 1894.2307692307695,
             "flight_drag_coefficient": 0.4215754207256022,
             "flight_frontal_area": 0.5831795076695577,
             "flight_lift_coefficient": 0.9241344439796696,
@@ -2764,7 +2764,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1923.0769230769233,
+            "jump_force": 1894.2307692307695,
             "flight_drag_coefficient": 0.4256290305402714,
             "flight_frontal_area": 0.5501693468580733,
             "flight_lift_coefficient": 0.9495111335168689,
@@ -2784,7 +2784,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1945.0549450549452,
+            "jump_force": 1915.879120879121,
             "flight_drag_coefficient": 0.43373625016961,
             "flight_frontal_area": 0.5281625729837504,
             "flight_lift_coefficient": 0.9146181854032199,
@@ -2804,7 +2804,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1934.0659340659342,
+            "jump_force": 1905.0549450549452,
             "flight_drag_coefficient": 0.4296826403549407,
             "flight_frontal_area": 0.49515241217226597,
             "flight_lift_coefficient": 0.9241344439796696,
@@ -2824,7 +2824,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1931.868131868132,
+            "jump_force": 1902.89010989011,
             "flight_drag_coefficient": 0.43373625016961,
             "flight_frontal_area": 0.5391659599209118,
             "flight_lift_coefficient": 0.91356082333917,
@@ -2844,7 +2844,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1989.010989010989,
+            "jump_force": 1959.1758241758241,
             "flight_drag_coefficient": 0.43373625016961,
             "flight_frontal_area": 0.5501693468580733,
             "flight_lift_coefficient": 0.9621994782854685,
@@ -2864,7 +2864,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1956.0439560439563,
+            "jump_force": 1926.703296703297,
             "flight_drag_coefficient": 0.40536098146692523,
             "flight_frontal_area": 0.5061557991094274,
             "flight_lift_coefficient": 0.9621994782854685,
@@ -2884,7 +2884,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1920.879120879121,
+            "jump_force": 1892.0659340659342,
             "flight_drag_coefficient": 0.4236022256329368,
             "flight_frontal_area": 0.5281625729837504,
             "flight_lift_coefficient": 0.9304786163639694,
@@ -2904,7 +2904,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1928.5714285714287,
+            "jump_force": 1899.642857142857,
             "flight_drag_coefficient": 0.4104279937352618,
             "flight_frontal_area": 0.5501693468580733,
             "flight_lift_coefficient": 0.9347080646201693,
@@ -2924,7 +2924,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1905.4945054945056,
+            "jump_force": 1876.912087912088,
             "flight_drag_coefficient": 0.4317094452622753,
             "flight_frontal_area": 0.5061557991094274,
             "flight_lift_coefficient": 0.91356082333917,
@@ -2944,7 +2944,7 @@
             "takeoff_drag_coefficient": 1,
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
-            "jump_force": 1914.2857142857144,
+            "jump_force": 1885.5714285714287,
             "flight_drag_coefficient": 0.4296826403549407,
             "flight_frontal_area": 0.5171591860465888,
             "flight_lift_coefficient": 0.9029872026986703,

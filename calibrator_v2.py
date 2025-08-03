@@ -174,8 +174,8 @@ class CalibratorV2:
         return best_error
 
     def optimize_hill_friction(self):
-        """Optymalizuje tarcie skoczni dla lepszych wyników"""
-        print(f"\n{Fore.CYAN}Optymalizacja tarcia skoczni...{Style.RESET_ALL}")
+        """Inteligentnie optymalizuje tarcie skoczni na podstawie wyników Daniela"""
+        print(f"\n{Fore.CYAN}Inteligentna optymalizacja tarcia skoczni...{Style.RESET_ALL}")
 
         # Testuj Daniela na wszystkich skoczniach
         results = self.test_daniel_on_all_hills()
@@ -183,34 +183,56 @@ class CalibratorV2:
 
         # Optymalizuj tarcie dla każdej skoczni osobno
         for hill in tqdm(self.hills, desc="Optymalizacja tarcia"):
-            original_friction = hill.inrun_friction_coefficient
-            best_friction = original_friction
-            best_hill_error = float("inf")
-
-            # Testuj różne wartości tarcia
-            for friction_test in [0.02, 0.04, 0.06, 0.08, 0.10, 0.12]:
-                if friction_test > 0.12:  # Limit tarcia
-                    continue
-
-                hill.inrun_friction_coefficient = friction_test
-
-                # Testuj Daniela na tej skoczni
-                target_gate = self.calculate_target_gate(hill)
-                target_distance = self.calculate_target_distance(hill)
-                distance = self.simulate_jump(hill, self.daniel, target_gate)
-                error = abs(distance - target_distance)
-
-                if error < best_hill_error:
-                    best_hill_error = error
-                    best_friction = friction_test
-
-            # Zastosuj najlepsze tarcie
-            hill.inrun_friction_coefficient = best_friction
+            target_gate = self.calculate_target_gate(hill)
+            target_distance = self.calculate_target_distance(hill)
+            
+            # Sprawdź aktualny wynik Daniela na tej skoczni
+            current_distance = self.simulate_jump(hill, self.daniel, target_gate)
+            current_error = abs(current_distance - target_distance)
+            
+            # Jeśli błąd jest duży (>5m), dostosuj tarcie
+            if current_error > 5:
+                original_friction = hill.inrun_friction_coefficient
+                best_friction = original_friction
+                best_error = current_error
+                
+                # Sprawdź czy Daniel skacze za krótko czy za daleko
+                if current_distance < target_distance:
+                    # Skacze za krótko - zmniejsz tarcie
+                    friction_tests = [0.02, 0.03, 0.04, 0.05, 0.06, 0.08, 0.10]
+                    print(f"{Fore.YELLOW}{hill.name}: Daniel skacze za krótko ({current_distance:.1f}m vs {target_distance}m), zmniejszam tarcie{Style.RESET_ALL}")
+                else:
+                    # Skacze za daleko - zwiększ tarcie (ale max 0.12)
+                    friction_tests = [0.06, 0.08, 0.10, 0.12]
+                    print(f"{Fore.YELLOW}{hill.name}: Daniel skacze za daleko ({current_distance:.1f}m vs {target_distance}m), zwiększam tarcie{Style.RESET_ALL}")
+                
+                # Testuj różne wartości tarcia
+                for friction_test in friction_tests:
+                    if friction_test > 0.12:  # Limit tarcia
+                        continue
+                    
+                    hill.inrun_friction_coefficient = friction_test
+                    
+                    # Testuj Daniela na tej skoczni
+                    test_distance = self.simulate_jump(hill, self.daniel, target_gate)
+                    test_error = abs(test_distance - target_distance)
+                    
+                    if test_error < best_error:
+                        best_error = test_error
+                        best_friction = friction_test
+                
+                # Zastosuj najlepsze tarcie
+                hill.inrun_friction_coefficient = best_friction
+                
+                if best_friction != original_friction:
+                    print(f"{Fore.GREEN}  Tarcie: {original_friction:.3f} → {best_friction:.3f} (błąd: {current_error:.1f}m → {best_error:.1f}m){Style.RESET_ALL}")
+                else:
+                    print(f"{Fore.CYAN}  Tarcie bez zmian: {original_friction:.3f} (błąd: {current_error:.1f}m){Style.RESET_ALL}")
 
         # Sprawdź końcowy błąd
         final_results = self.test_daniel_on_all_hills()
         final_error = sum(r["error"] for r in final_results) / len(final_results)
-
+        
         print(
             f"{Fore.GREEN}Końcowy błąd po optymalizacji tarcia: {final_error:.2f}m{Style.RESET_ALL}"
         )

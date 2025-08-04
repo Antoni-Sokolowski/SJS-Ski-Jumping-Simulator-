@@ -32,8 +32,17 @@ from PySide6.QtWidgets import (
     QProxyStyle,
     QStyle,
     QGroupBox,
+    QCheckBox,
 )
-from PySide6.QtCore import Qt, QUrl, QTimer, QSize, QPoint
+from PySide6.QtCore import (
+    Qt,
+    QUrl,
+    QTimer,
+    QSize,
+    QPoint,
+    QThread,
+    Signal as pyqtSignal,
+)
 from PySide6.QtGui import QIcon, QPixmap, QImage, QPainter, QPolygon, QColor, QFont
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -99,6 +108,117 @@ def get_meter_value(k_point: float) -> float:
 def round_distance_to_half_meter(distance: float) -> float:
     """Rounds distance to the nearest 0.5m precision."""
     return round(distance * 2) / 2
+
+
+def get_qualification_limit(k_point: float) -> int:
+    """
+    Określa liczbę zawodników awansujących z kwalifikacji na podstawie typu skoczni.
+
+    Args:
+        k_point: Punkt K skoczni w metrach
+
+    Returns:
+        int: Liczba zawodników awansujących (40 dla mamucich, 50 dla pozostałych)
+    """
+    # Skocznie mamucie (K >= 170) mają przelicznik 1.2 i limit 40 zawodników
+    if k_point >= 170:
+        return 40
+    else:
+        return 50
+
+
+class RecommendedGateWorker(QThread):
+    """
+    Worker thread do obliczania rekomendowanej belki w tle.
+    """
+
+    calculation_finished = pyqtSignal(int, float)  # recommended_gate, max_distance
+
+    def __init__(self, hill, jumpers):
+        super().__init__()
+        self.hill = hill
+        self.jumpers = jumpers
+
+    def run(self):
+        """
+        Wykonuje obliczenia rekomendowanej belki w osobnym wątku.
+        """
+        if not self.jumpers or not self.hill:
+            self.calculation_finished.emit(1, 0.0)
+            return
+
+        # Sprawdź każdą belkę od najwyższej do najniższej
+        for gate in range(self.hill.gates, 0, -1):
+            max_distance = 0
+            safe_gate = True
+
+            # Sprawdź wszystkich zawodników na tej belce
+            for jumper in self.jumpers:
+                try:
+                    distance = fly_simulation(self.hill, jumper, gate_number=gate)
+                    max_distance = max(max_distance, distance)
+
+                    # Jeśli którykolwiek skoczek przekracza HS, ta belka nie jest bezpieczna
+                    if distance > self.hill.L:
+                        safe_gate = False
+                        break
+
+                except Exception:
+                    # W przypadku błędu symulacji, uznaj belkę za niebezpieczną
+                    safe_gate = False
+                    break
+
+            # Jeśli wszystkie skoki są bezpieczne, to jest rekomendowana belka
+            if safe_gate:
+                self.calculation_finished.emit(gate, max_distance)
+                return
+
+        # Jeśli żadna belka nie jest bezpieczna, zwróć najniższą
+        self.calculation_finished.emit(1, 0.0)
+
+
+def calculate_recommended_gate(hill, jumpers):
+    """
+    Oblicza rekomendowaną belkę na podstawie skoczni i listy zawodników.
+    Rekomendowana belka to najwyższa belka, z której żaden skoczek nie skacze powyżej HS.
+
+    Args:
+        hill: Obiekt skoczni
+        jumpers: Lista zawodników do sprawdzenia
+
+    Returns:
+        int: Numer rekomendowanej belki (1-based)
+    """
+    if not jumpers or not hill:
+        return 1
+
+    # Sprawdź każdą belkę od najwyższej do najniższej
+    for gate in range(hill.gates, 0, -1):
+        max_distance = 0
+        safe_gate = True
+
+        # Sprawdź wszystkich zawodników na tej belce
+        for jumper in jumpers:
+            try:
+                distance = fly_simulation(hill, jumper, gate_number=gate)
+                max_distance = max(max_distance, distance)
+
+                # Jeśli którykolwiek skoczek przekracza HS, ta belka nie jest bezpieczna
+                if distance > hill.L:
+                    safe_gate = False
+                    break
+
+            except Exception:
+                # W przypadku błędu symulacji, uznaj belkę za niebezpieczną
+                safe_gate = False
+                break
+
+        # Jeśli wszystkie skoki są bezpieczne, to jest rekomendowana belka
+        if safe_gate:
+            return gate
+
+    # Jeśli żadna belka nie jest bezpieczna, zwróć najniższą
+    return 1
 
 
 def format_distance_with_unit(distance: float) -> str:
@@ -863,9 +983,23 @@ class MainWindow(QMainWindow):
         competition_group_layout = QVBoxLayout(competition_group)
         competition_group_layout.setSpacing(15)
 
+        # Kontener dla skoczni i belki w jednym wierszu
+        hill_gate_container = QHBoxLayout()
+        hill_gate_container.setSpacing(20)
+
         # Wybór skoczni z ikoną
-        hill_layout = QHBoxLayout()
-        hill_layout.addWidget(QLabel("Skocznia:"))
+        hill_layout = QVBoxLayout()
+        hill_layout.setSpacing(5)
+        hill_label = QLabel("Skocznia:")
+        hill_label.setStyleSheet("""
+            QLabel {
+                font-weight: bold;
+                color: #ffffff;
+                font-size: 12px;
+            }
+        """)
+        hill_layout.addWidget(hill_label)
+
         self.comp_hill_combo = QComboBox()
         self.comp_hill_combo.addItem("Wybierz skocznię")
         for hill in self.all_hills:
@@ -874,20 +1008,104 @@ class MainWindow(QMainWindow):
             )
         self.comp_hill_combo.currentIndexChanged.connect(self.update_competition_hill)
         hill_layout.addWidget(self.comp_hill_combo)
-        competition_group_layout.addLayout(hill_layout)
+        hill_gate_container.addLayout(hill_layout)
 
-        # Wybór belki z ikoną
-        gate_layout = QHBoxLayout()
-        gate_layout.addWidget(QLabel("Belka:"))
+        # Wybór belki z rekomendacją
+        gate_layout = QVBoxLayout()
+        gate_layout.setSpacing(5)
+        gate_label = QLabel("Belka:")
+        gate_label.setStyleSheet("""
+            QLabel {
+                font-weight: bold;
+                color: #ffffff;
+                font-size: 12px;
+            }
+        """)
+        gate_layout.addWidget(gate_label)
+
+        # Kontener dla belki i rekomendacji
+        gate_input_layout = QHBoxLayout()
+        gate_input_layout.setSpacing(10)
+
         self.comp_gate_spin = QSpinBox()
         self.comp_gate_spin.setMinimum(1)
         self.comp_gate_spin.setMaximum(1)
-        gate_layout.addWidget(self.comp_gate_spin)
-        competition_group_layout.addLayout(gate_layout)
+        gate_input_layout.addWidget(self.comp_gate_spin)
+
+        # Label z rekomendowaną belką
+        self.recommended_gate_label = QLabel("")
+        self.recommended_gate_label.setStyleSheet("""
+            QLabel {
+                color: #28a745;
+                font-weight: bold;
+                font-size: 12px;
+                padding: 4px 8px;
+                background-color: rgba(40, 167, 69, 0.1);
+                border-radius: 4px;
+                border: 1px solid #28a745;
+            }
+        """)
+        self.recommended_gate_label.setVisible(False)
+        gate_input_layout.addWidget(self.recommended_gate_label)
+        gate_input_layout.addStretch()
+
+        gate_layout.addLayout(gate_input_layout)
+
+        # Dolny wiersz z informacją o rekomendacji
+        self.gate_info_label = QLabel("")
+        self.gate_info_label.setStyleSheet("""
+            QLabel {
+                color: #6c757d;
+                font-size: 11px;
+                font-style: italic;
+                padding: 2px 0px;
+            }
+        """)
+        self.gate_info_label.setVisible(False)
+        gate_layout.addWidget(self.gate_info_label)
+
+        hill_gate_container.addLayout(gate_layout)
+        competition_group_layout.addLayout(hill_gate_container)
+
+        # Opcje kwalifikacji
+        qualification_layout = QHBoxLayout()
+        qualification_layout.setSpacing(10)
+
+        self.qualification_checkbox = QCheckBox("Kwalifikacje")
+        self.qualification_checkbox.setStyleSheet("""
+            QCheckBox {
+                color: #ffffff;
+                font-weight: bold;
+                font-size: 12px;
+                spacing: 8px;
+            }
+            QCheckBox::indicator {
+                width: 18px;
+                height: 18px;
+                border: 2px solid #4a4a4a;
+                border-radius: 3px;
+                background-color: #2a2a2a;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #0078d4;
+                border-color: #0078d4;
+            }
+            QCheckBox::indicator:checked::after {
+                content: "✓";
+                color: white;
+                font-weight: bold;
+                font-size: 12px;
+            }
+        """)
+        self.qualification_checkbox.setChecked(True)  # Domyślnie włączone
+        qualification_layout.addWidget(self.qualification_checkbox)
+        qualification_layout.addStretch()
+
+        competition_group_layout.addLayout(qualification_layout)
 
         # Przycisk rozpoczęcia zawodów z lepszym stylem
-        run_comp_btn = QPushButton("Rozpocznij zawody")
-        run_comp_btn.setStyleSheet("""
+        self.run_comp_btn = QPushButton("Rozpocznij zawody")
+        self.run_comp_btn.setStyleSheet("""
             QPushButton {
                 background-color: #28a745;
                 color: white;
@@ -904,8 +1122,8 @@ class MainWindow(QMainWindow):
                 background-color: #1e7e34;
             }
         """)
-        run_comp_btn.clicked.connect(self.run_competition)
-        competition_group_layout.addWidget(run_comp_btn)
+        self.run_comp_btn.clicked.connect(self._on_competition_button_clicked)
+        competition_group_layout.addWidget(self.run_comp_btn)
 
         left_panel.addWidget(competition_group)
         left_panel.addStretch()
@@ -993,10 +1211,50 @@ class MainWindow(QMainWindow):
         # Styl tabeli wyników - będzie aktualizowany w update_styles()
         self.results_table.setStyleSheet("")
 
+        # Tabela kwalifikacji - osobna tabela z inną strukturą
+        self.qualification_table = QTableWidget()
+        self.qualification_table.setColumnCount(
+            5
+        )  # Miejsce, Flaga, Zawodnik, Dystans, Punkty
+        self.qualification_table.setHorizontalHeaderLabels(
+            [
+                "",
+                "",
+                "Zawodnik",
+                "Dystans",
+                "Punkty",
+            ]
+        )
+        self.qualification_table.verticalHeader().setDefaultSectionSize(45)
+        self.qualification_table.verticalHeader().setVisible(False)
+        self.qualification_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.Stretch
+        )
+        self.qualification_table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeToContents
+        )
+        self.qualification_table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.ResizeToContents
+        )
+        self.qualification_table.horizontalHeader().setSectionResizeMode(
+            2, QHeaderView.Stretch
+        )
+        self.qualification_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.qualification_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.qualification_table.cellClicked.connect(
+            self._on_qualification_cell_clicked
+        )
+        self.qualification_table.setVisible(False)  # Domyślnie ukryta
+
+        # Styl tabeli kwalifikacji - będzie aktualizowany w update_styles()
+        self.qualification_table.setStyleSheet("")
+
         results_panel.addWidget(self.results_table)
+        results_panel.addWidget(self.qualification_table)
         main_hbox.addLayout(results_panel, 2)
 
         layout.addLayout(main_hbox)
+        self.competition_page = widget
         self.central_widget.addWidget(widget)
 
     def _create_data_editor_page(self):
@@ -1956,6 +2214,11 @@ class MainWindow(QMainWindow):
                     }
                 """)
 
+        # Aktualizuj rekomendowaną belkę jeśli skocznia jest wybrana
+        if hasattr(self, "comp_hill_combo") and self.comp_hill_combo.currentIndex() > 0:
+            hill = self.all_hills[self.comp_hill_combo.currentIndex() - 1]
+            self._update_recommended_gate(hill)
+
     def _toggle_all_jumpers(self):
         self.play_sound()
         checked_count = sum(
@@ -2033,6 +2296,86 @@ class MainWindow(QMainWindow):
                         border-radius: 4px;
                     }
                 """)
+
+        # Aktualizuj rekomendowaną belkę jeśli skocznia jest wybrana
+        if hasattr(self, "comp_hill_combo") and self.comp_hill_combo.currentIndex() > 0:
+            hill = self.all_hills[self.comp_hill_combo.currentIndex() - 1]
+            self._update_recommended_gate(hill)
+
+    def _update_recommended_gate(self, hill):
+        """
+        Aktualizuje wyświetlanie rekomendowanej belki na podstawie wybranej skoczni i zawodników.
+        Obliczenia są wykonywane w osobnym wątku, aby nie blokować interfejsu.
+        """
+        if not hasattr(self, "recommended_gate_label") or not hasattr(
+            self, "gate_info_label"
+        ):
+            return
+
+        if not self.selection_order:
+            self.recommended_gate_label.setVisible(False)
+            self.gate_info_label.setVisible(False)
+            return
+
+        # Zatrzymaj poprzedni worker jeśli istnieje
+        if (
+            hasattr(self, "recommended_gate_worker")
+            and self.recommended_gate_worker.isRunning()
+        ):
+            self.recommended_gate_worker.quit()
+            self.recommended_gate_worker.wait()
+
+        # Pokaż wskaźnik ładowania
+        self.recommended_gate_label.setText("Obliczanie rekomendacji...")
+        self.recommended_gate_label.setStyleSheet("""
+            QLabel {
+                color: #ffc107;
+                font-weight: bold;
+                font-size: 12px;
+                padding: 4px 8px;
+                background-color: rgba(255, 193, 7, 0.1);
+                border-radius: 4px;
+                border: 1px solid #ffc107;
+            }
+        """)
+        self.recommended_gate_label.setVisible(True)
+        self.gate_info_label.setVisible(False)
+
+        # Utwórz i uruchom worker w osobnym wątku
+        self.recommended_gate_worker = RecommendedGateWorker(hill, self.selection_order)
+        self.recommended_gate_worker.calculation_finished.connect(
+            self._on_recommended_gate_calculated
+        )
+        self.recommended_gate_worker.start()
+
+    def _on_recommended_gate_calculated(self, recommended_gate, max_distance):
+        """
+        Callback wywoływany po zakończeniu obliczeń rekomendowanej belki.
+        """
+        if not hasattr(self, "recommended_gate_label") or not hasattr(
+            self, "gate_info_label"
+        ):
+            return
+
+        # Przywróć normalny styl (niebieski zamiast zielonego)
+        self.recommended_gate_label.setStyleSheet("""
+            QLabel {
+                color: #0078d4;
+                font-weight: bold;
+                font-size: 12px;
+                padding: 4px 8px;
+                background-color: rgba(0, 120, 212, 0.1);
+                border-radius: 4px;
+                border: 1px solid #0078d4;
+            }
+        """)
+
+        # Aktualizuj wyświetlanie
+        self.recommended_gate_label.setText(f"Rekomendowana: {recommended_gate}")
+        self.recommended_gate_label.setVisible(True)
+
+        # Ukryj informację o maksymalnej odległości
+        self.gate_info_label.setVisible(False)
 
     def _sort_jumper_list(self, sort_text):
         items_data = []
@@ -2127,6 +2470,31 @@ class MainWindow(QMainWindow):
                 )
             except (ValueError, TypeError):
                 return
+
+    def _on_qualification_cell_clicked(self, row, column):
+        """Obsługa kliknięcia w komórkę tabeli kwalifikacji"""
+        self.play_sound()
+
+        if not self.qualification_results or row >= len(self.qualification_results):
+            return
+
+        result = self.qualification_results[row]
+        jumper = result["jumper"]
+
+        # Sprawdź czy kliknięto w kolumnę z dystansem (kolumna 3)
+        if column == 3 and result.get("distance", 0) > 0:  # Dystans kwalifikacji
+            self._show_jump_replay(
+                jumper,
+                self.competition_hill,
+                self.competition_gate,
+                result["distance"],
+                "Q",
+            )
+        # Sprawdź czy kliknięto w kolumnę z punktami (kolumna 4)
+        elif column == 4 and result.get("points", 0) > 0:  # Punkty kwalifikacji
+            self._show_points_breakdown(
+                jumper, result["distance"], result["points"], "Q"
+            )
 
     def _show_jump_replay(self, jumper, hill, gate, distance, seria_num):
         sim_data = self._calculate_trajectory(jumper, hill, gate)
@@ -2633,8 +3001,13 @@ class MainWindow(QMainWindow):
             hill = self.all_hills[self.comp_hill_combo.currentIndex() - 1]
             if hill:
                 self.comp_gate_spin.setMaximum(hill.gates)
+                # Oblicz rekomendowaną belkę dla wybranych zawodników
+                self._update_recommended_gate(hill)
         else:
             hill = None
+            # Ukryj informację o rekomendowanej belce
+            if hasattr(self, "recommended_gate_label"):
+                self.recommended_gate_label.setVisible(False)
 
     def clear_results(self):
         self.jumper_combo.setCurrentIndex(0)
@@ -2679,6 +3052,12 @@ class MainWindow(QMainWindow):
 
     def update_styles(self):
         self.setStyleSheet(self.themes[self.current_theme](self.contrast_level))
+
+        # Apply styles to both tables
+        if hasattr(self, "results_table"):
+            self.results_table.setStyleSheet("")
+        if hasattr(self, "qualification_table"):
+            self.qualification_table.setStyleSheet("")
 
         if hasattr(self, "figure"):
             self.figure.set_facecolor(
@@ -2759,10 +3138,36 @@ class MainWindow(QMainWindow):
         self.current_jumper_index = 0
         self.current_round = 1
         self.competition_order = self.selection_order
+        self.pause_after_qualification = False
+        self.pause_after_first_round = False
+        self.simulation_running = True  # Flaga kontrolująca symulację
+
+        # Sprawdź czy kwalifikacje są włączone
+        self.qualification_enabled = self.qualification_checkbox.isChecked()
+        if self.qualification_enabled:
+            self.qualification_limit = get_qualification_limit(self.competition_hill.K)
+            self.qualification_phase = True  # True = kwalifikacje, False = konkurs
+            self.qualification_results = []
+            self.qualification_order = self.selection_order.copy()
+            self.current_qualification_jumper_index = 0
+
+            # Pokaż tabelę kwalifikacji, ukryj tabelę konkursu
+            self.qualification_table.setVisible(True)
+            self.results_table.setVisible(False)
+        else:
+            self.qualification_phase = False
+            self.qualification_limit = 0
+
+            # Pokaż tabelę konkursu, ukryj tabelę kwalifikacji
+            self.results_table.setVisible(True)
+            self.qualification_table.setVisible(False)
 
         # Aktualizuj informację o serii
         if hasattr(self, "round_info_label"):
-            self.round_info_label.setText("Seria: 1/2")
+            if self.qualification_enabled:
+                self.round_info_label.setText("Kwalifikacje")
+            else:
+                self.round_info_label.setText("Seria: 1/2")
 
         # Reset postępu
         if hasattr(self, "progress_label"):
@@ -2784,10 +3189,12 @@ class MainWindow(QMainWindow):
         self._update_competition_table()
 
         # Lepszy komunikat rozpoczęcia
-        self.competition_status_label.setText(
-            f"Rozpoczynanie zawodów na {self.competition_hill.name}... "
-            f"({len(self.selection_order)} zawodników)"
-        )
+        if self.qualification_enabled:
+            status_text = f"Rozpoczynanie kwalifikacji na {self.competition_hill.name}... ({len(self.selection_order)} zawodników)"
+        else:
+            status_text = f"Rozpoczynanie zawodów na {self.competition_hill.name}... ({len(self.selection_order)} zawodników)"
+
+        self.competition_status_label.setText(status_text)
         self.competition_status_label.setStyleSheet("""
             QLabel {
                 color: #28a745;
@@ -2799,6 +3206,9 @@ class MainWindow(QMainWindow):
                 border-left: 4px solid #28a745;
             }
         """)
+
+        # Zmień przycisk na 'Stop' podczas zawodów
+        self._update_competition_button("Stop", "#dc3545")
 
         QTimer.singleShot(500, self._process_next_jumper)
 
@@ -2820,6 +3230,73 @@ class MainWindow(QMainWindow):
         """)
 
     def _process_next_jumper(self):
+        # Sprawdź czy symulacja jest zatrzymana
+        if not self.simulation_running:
+            return
+
+        # Sprawdź czy jesteśmy w fazie kwalifikacji
+        if self.qualification_enabled and self.qualification_phase:
+            # Logika kwalifikacji
+            if self.current_qualification_jumper_index >= len(self.qualification_order):
+                # Koniec kwalifikacji - przejdź do konkursu
+                self._finish_qualification()
+                return
+
+            jumper = self.qualification_order[self.current_qualification_jumper_index]
+
+            # Lepszy komunikat o aktualnym skoczku w kwalifikacjach
+            self.competition_status_label.setText(
+                f"🎯 Kwalifikacje: {jumper} skacze..."
+            )
+            self.competition_status_label.setStyleSheet("""
+                QLabel {
+                    color: #0078d4;
+                    font-weight: bold;
+                    font-size: 14px;
+                    padding: 10px;
+                    background-color: rgba(0, 120, 212, 0.1);
+                    border-radius: 6px;
+                    border-left: 4px solid #0078d4;
+                }
+            """)
+
+            # Symuluj skok kwalifikacyjny
+            try:
+                distance = fly_simulation(
+                    self.competition_hill, jumper, gate_number=self.competition_gate
+                )
+                distance = round_distance_to_half_meter(distance)
+                points = calculate_jump_points(distance, self.competition_hill.K)
+
+                # Dodaj wynik kwalifikacji
+                self.qualification_results.append(
+                    {"jumper": jumper, "distance": distance, "points": points}
+                )
+
+                # Aktualizuj postęp
+                progress = (
+                    (self.current_qualification_jumper_index + 1)
+                    / len(self.qualification_order)
+                ) * 100
+                if hasattr(self, "progress_label"):
+                    self.progress_label.setText(f"Postęp kwalifikacji: {progress:.1f}%")
+
+                self.current_qualification_jumper_index += 1
+
+                # Aktualizuj tabelę wyników kwalifikacji
+                self._update_qualification_table()
+
+                # Następny skoczek po krótkiej przerwie
+                QTimer.singleShot(150, self._process_next_jumper)
+
+            except Exception as e:
+                print(f"Błąd symulacji skoku kwalifikacyjnego: {e}")
+                self.current_qualification_jumper_index += 1
+                QTimer.singleShot(150, self._process_next_jumper)
+
+            return
+
+        # Logika konkursu (bez zmian)
         if self.current_jumper_index >= len(self.competition_order):
             if self.current_round == 1:
                 # Koniec pierwszej serii
@@ -2838,7 +3315,9 @@ class MainWindow(QMainWindow):
 
                 self.current_round = 2
                 self.competition_results.sort(key=lambda x: x["p1"], reverse=True)
-                finalists = self.competition_results[:30]
+                # Limit finalistów: 30 dla normalnych zawodów, 25 dla zawodów z kwalifikacjami
+                finalist_limit = 25 if self.qualification_enabled else 30
+                finalists = self.competition_results[:finalist_limit]
                 finalists.reverse()
                 self.competition_order = [res["jumper"] for res in finalists]
                 self.current_jumper_index = 0
@@ -2866,9 +3345,14 @@ class MainWindow(QMainWindow):
                             border-left: 4px solid #dc3545;
                         }
                     """)
+
+                    # Przywróć przycisk do stanu początkowego gdy brak finalistów
+                    self._update_competition_button("Rozpocznij zawody", "#28a745")
                     return
 
-                QTimer.singleShot(2000, self._start_second_round)
+                # Ustaw flagę pauzy po pierwszej serii
+                self.pause_after_first_round = True
+                QTimer.singleShot(2000, self._pause_after_first_round)
             else:
                 # Koniec zawodów
                 self.competition_status_label.setText("Zawody zakończone!")
@@ -2888,6 +3372,9 @@ class MainWindow(QMainWindow):
                     key=lambda x: (x["p1"] + x["p2"]), reverse=True
                 )
                 self._update_competition_table()
+
+                # Przywróć przycisk do stanu początkowego na końcu zawodów
+                self._update_competition_button("Rozpocznij zawody", "#28a745")
             return
 
         jumper = self.competition_order[self.current_jumper_index]
@@ -2938,8 +3425,123 @@ class MainWindow(QMainWindow):
 
         QTimer.singleShot(150, self._process_next_jumper)
 
+    def _finish_qualification(self):
+        """Kończy kwalifikacje i przechodzi do konkursu"""
+        # Sortuj wyniki kwalifikacji
+        self.qualification_results.sort(key=lambda x: x["points"], reverse=True)
+
+        # Wybierz zawodników awansujących
+        qualified_jumpers = self.qualification_results[: self.qualification_limit]
+
+        # Aktualizuj komunikat
+        self.competition_status_label.setText(
+            f"Kwalifikacje zakończone! {len(qualified_jumpers)} zawodników awansuje do konkursu."
+        )
+        self.competition_status_label.setStyleSheet("""
+            QLabel {
+                color: #ffc107;
+                font-weight: bold;
+                font-size: 14px;
+                padding: 10px;
+                background-color: rgba(255, 193, 7, 0.1);
+                border-radius: 6px;
+                border-left: 4px solid #ffc107;
+            }
+        """)
+
+        # Przygotuj dane konkursu (ale nie przełączaj tabeli jeszcze)
+        self.qualification_phase = False
+        self.competition_order = [result["jumper"] for result in qualified_jumpers]
+        self.current_jumper_index = 0
+        self.current_round = 1
+
+        # Reset wyników konkursu
+        self.competition_results = []
+        for jumper in self.competition_order:
+            self.competition_results.append(
+                {
+                    "jumper": jumper,
+                    "d1": 0.0,
+                    "d2": 0.0,
+                    "p1": 0.0,
+                    "p2": 0.0,
+                }
+            )
+
+        # Aktualizuj informację o serii
+        if hasattr(self, "round_info_label"):
+            self.round_info_label.setText("Seria: 1/2")
+
+        # Reset postępu
+        if hasattr(self, "progress_label"):
+            self.progress_label.setText("Postęp: 0%")
+
+        # Zachowaj tabelę kwalifikacji widoczną do momentu rozpoczęcia konkursu
+        # self.qualification_table.setVisible(False)
+        # self.results_table.setVisible(True)
+
+        # Aktualizuj tabelę wyników konkursu (ale nie pokazuj jej jeszcze)
+        self.results_table.clearContents()
+        self.results_table.setRowCount(len(self.competition_results))
+        self._update_competition_table()
+
+        # Ustaw flagę pauzy po kwalifikacjach
+        self.pause_after_qualification = True
+        # Rozpocznij konkurs po krótkiej przerwie
+        QTimer.singleShot(2000, self._pause_after_qualification)
+
+    def _update_qualification_table(self):
+        """Aktualizuje tabelę wyników kwalifikacji"""
+        # Sortuj wyniki kwalifikacji
+        sorted_results = sorted(
+            self.qualification_results, key=lambda x: x["points"], reverse=True
+        )
+
+        # Aktualizuj tabelę kwalifikacji
+        self.qualification_table.clearContents()
+        self.qualification_table.setRowCount(len(sorted_results))
+
+        for row, result in enumerate(sorted_results):
+            jumper = result["jumper"]
+            distance = result["distance"]
+            points = result["points"]
+
+            # Miejsce
+            place_item = QTableWidgetItem(str(row + 1))
+            place_item.setTextAlignment(Qt.AlignCenter)
+            self.qualification_table.setItem(row, 0, place_item)
+
+            # Flaga
+            flag_item = QTableWidgetItem()
+            flag_item.setIcon(self.create_rounded_flag_icon(jumper.nationality))
+            self.qualification_table.setItem(row, 1, flag_item)
+
+            # Zawodnik
+            jumper_item = QTableWidgetItem(str(jumper))
+            self.qualification_table.setItem(row, 2, jumper_item)
+
+            # Odległość kwalifikacji
+            distance_item = QTableWidgetItem(format_distance_with_unit(distance))
+            distance_item.setTextAlignment(Qt.AlignCenter)
+            self.qualification_table.setItem(row, 3, distance_item)
+
+            # Punkty kwalifikacji
+            points_item = QTableWidgetItem(f"{points:.1f}")
+            points_item.setTextAlignment(Qt.AlignCenter)
+            self.qualification_table.setItem(row, 4, points_item)
+
+            # Kolorowanie awansujących
+            if row < self.qualification_limit:
+                for col in range(self.qualification_table.columnCount()):
+                    item = self.qualification_table.item(row, col)
+                    if item:
+                        item.setBackground(
+                            QColor(40, 167, 69, 50)
+                        )  # Zielone tło dla awansujących
+
     def _start_second_round(self):
         """Rozpoczyna drugą serię zawodów"""
+        self.simulation_running = True  # Wznów symulację
         self.competition_status_label.setText(
             f"Rozpoczynanie 2. serii... ({len(self.competition_order)} finalistów)"
         )
@@ -2954,11 +3556,157 @@ class MainWindow(QMainWindow):
                 border-left: 4px solid #28a745;
             }
         """)
+        self._update_competition_button("Stop", "#dc3545")
         QTimer.singleShot(1000, self._process_next_jumper)
+
+    def _pause_after_qualification(self):
+        """Pauza po kwalifikacjach"""
+        self.competition_status_label.setText(
+            "Kwalifikacje zakończone! Kliknij przycisk aby rozpocząć konkurs."
+        )
+        self.competition_status_label.setStyleSheet("""
+            QLabel {
+                color: #ffc107;
+                font-weight: bold;
+                font-size: 14px;
+                padding: 10px;
+                background-color: rgba(255, 193, 7, 0.1);
+                border-radius: 6px;
+                border-left: 4px solid #ffc107;
+            }
+        """)
+        self._update_competition_button("Rozpocznij I serię", "#ffc107")
+
+    def _pause_after_first_round(self):
+        """Pauza po pierwszej serii"""
+        self.competition_status_label.setText(
+            "I seria zakończona! Kliknij przycisk aby rozpocząć II serię."
+        )
+        self.competition_status_label.setStyleSheet("""
+            QLabel {
+                color: #ffc107;
+                font-weight: bold;
+                font-size: 14px;
+                padding: 10px;
+                background-color: rgba(255, 193, 7, 0.1);
+                border-radius: 6px;
+                border-left: 4px solid #ffc107;
+            }
+        """)
+        self._update_competition_button("Rozpocznij II serię", "#ffc107")
+
+    def _on_competition_button_clicked(self):
+        """Obsługa kliknięcia głównego przycisku zawodów"""
+        self.play_sound()
+
+        # Sprawdź aktualny stan przycisku i wykonaj odpowiednią akcję
+        button_text = self.run_comp_btn.text()
+
+        if button_text == "Rozpocznij zawody":
+            # Rozpocznij zawody
+            self.run_competition()
+        elif button_text == "Stop":
+            # Zatrzymaj zawody
+            self._stop_competition()
+        elif button_text == "Kontynuuj":
+            # Kontynuuj zawody
+            self._continue_competition()
+        elif button_text == "Rozpocznij I serię":
+            # Rozpocznij pierwszą serię konkursu
+            self._start_first_round()
+        elif button_text == "Rozpocznij II serię":
+            # Rozpocznij drugą serię
+            self._start_second_round()
+
+    def _update_competition_button(self, text, color="#28a745"):
+        """Aktualizuje tekst i kolor głównego przycisku zawodów"""
+        self.run_comp_btn.setText(text)
+        self.run_comp_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {color};
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 6px;
+                font-size: 16px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {self._get_hover_color(color)};
+            }}
+            QPushButton:pressed {{
+                background-color: {self._get_pressed_color(color)};
+            }}
+        """)
+
+    def _get_hover_color(self, base_color):
+        """Zwraca kolor hover na podstawie koloru bazowego"""
+        color_map = {
+            "#28a745": "#218838",  # Zielony
+            "#dc3545": "#c82333",  # Czerwony
+            "#007bff": "#0056b3",  # Niebieski
+            "#ffc107": "#e0a800",  # Żółty
+        }
+        return color_map.get(base_color, "#218838")
+
+    def _get_pressed_color(self, base_color):
+        """Zwraca kolor pressed na podstawie koloru bazowego"""
+        color_map = {
+            "#28a745": "#1e7e34",  # Zielony
+            "#dc3545": "#bd2130",  # Czerwony
+            "#007bff": "#004085",  # Niebieski
+            "#ffc107": "#d39e00",  # Żółty
+        }
+        return color_map.get(base_color, "#1e7e34")
+
+    def _stop_competition(self):
+        """Zatrzymuje zawody i zmienia przycisk na 'Kontynuuj'"""
+        self.simulation_running = False  # Zatrzymaj symulację
+        self.competition_status_label.setText(
+            "Symulacja zatrzymana. Kliknij 'Kontynuuj' aby wznowić."
+        )
+        self.competition_status_label.setStyleSheet("""
+            QLabel {
+                color: #6c757d;
+                font-weight: bold;
+                font-size: 14px;
+                padding: 10px;
+                background-color: rgba(108, 117, 125, 0.1);
+                border-radius: 6px;
+                border-left: 4px solid #6c757d;
+            }
+        """)
+        self._update_competition_button("Kontynuuj", "#007bff")
+
+    def _continue_competition(self):
+        """Kontynuuje zawody i przywraca przycisk 'Stop'"""
+        self.simulation_running = True  # Wznów symulację
+        self._reset_status_label()
+        self._update_competition_button("Stop", "#dc3545")
+        QTimer.singleShot(500, self._process_next_jumper)
+
+    def _start_first_round(self):
+        """Rozpoczyna pierwszą serię konkursu po kwalifikacjach"""
+        self.simulation_running = True  # Wznów symulację
+        self.qualification_phase = False
+        self.current_jumper_index = 0
+        self.current_round = 1
+
+        # Pokaż tabelę konkursu, ukryj tabelę kwalifikacji
+        self.results_table.setVisible(True)
+        self.qualification_table.setVisible(False)
+
+        # Aktualizuj informację o serii
+        self.round_info_label.setText("Seria: 1/2")
+
+        self._update_competition_button("Stop", "#dc3545")
+        self._reset_status_label()
+
+        QTimer.singleShot(500, self._process_next_jumper)
 
     def _update_competition_table(self):
         # Sort results before displaying
-        if self.current_round == 1 and self.current_jumper_index > 0:
+        if self.current_round == 1:
             # In round 1, sort by first round points
             self.competition_results.sort(key=lambda x: x.get("p1", 0), reverse=True)
         elif self.current_round == 2:

@@ -3315,8 +3315,8 @@ class MainWindow(QMainWindow):
 
                 self.current_round = 2
                 self.competition_results.sort(key=lambda x: x["p1"], reverse=True)
-                # Limit finalistów: 30 dla normalnych zawodów, 25 dla zawodów z kwalifikacjami
-                finalist_limit = 25 if self.qualification_enabled else 30
+                # Do drugiej serii zawsze przechodzi 30 najlepszych zawodników z pierwszej serii
+                finalist_limit = 30
                 finalists = self.competition_results[:finalist_limit]
                 finalists.reverse()
                 self.competition_order = [res["jumper"] for res in finalists]

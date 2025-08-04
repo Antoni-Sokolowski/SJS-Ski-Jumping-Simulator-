@@ -33,8 +33,8 @@ from PySide6.QtWidgets import (
     QStyle,
     QGroupBox,
 )
-from PySide6.QtCore import Qt, QUrl, QTimer, QSize, QRect, QPoint
-from PySide6.QtGui import QIcon, QPixmap, QImage, QPainter, QPolygon, QColor
+from PySide6.QtCore import Qt, QUrl, QTimer, QSize, QPoint
+from PySide6.QtGui import QIcon, QPixmap, QImage, QPainter, QPolygon, QColor, QFont
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -45,6 +45,66 @@ from PIL import Image, ImageDraw
 from src.simulation import load_data_from_json, inrun_simulation, fly_simulation
 from src.hill import Hill
 from src.jumper import Jumper
+
+
+def calculate_jump_points(distance: float, k_point: float) -> float:
+    """
+    Oblicza punkty za skok na podstawie odległości i punktu K.
+
+    Args:
+        distance: Odległość skoku w metrach
+        k_point: Punkt K skoczni w metrach
+
+    Returns:
+        Punkty za skok (60 punktów za skok na K-point, +/- za każdy metr)
+    """
+    # Oblicz różnicę od K-point
+    difference = distance - k_point
+
+    # Określ meter value na podstawie K-point
+    meter_value = get_meter_value(k_point)
+
+    # Oblicz punkty: 60 + (różnica * meter_value)
+    points = 60.0 + (difference * meter_value)
+
+    return points
+
+
+def get_meter_value(k_point: float) -> float:
+    """Returns the meter value based on the K-point, as per FIS table."""
+    if k_point <= 24:
+        return 4.8
+    elif k_point <= 29:
+        return 4.4
+    elif k_point <= 34:
+        return 4.0
+    elif k_point <= 39:
+        return 3.6
+    elif k_point <= 49:
+        return 3.2
+    elif k_point <= 59:
+        return 2.8
+    elif k_point <= 69:
+        return 2.4
+    elif k_point <= 79:
+        return 2.2
+    elif k_point <= 99:
+        return 2.0
+    elif k_point <= 169:
+        return 1.8
+    else:
+        return 1.2
+
+
+def round_distance_to_half_meter(distance: float) -> float:
+    """Rounds distance to the nearest 0.5m precision."""
+    return round(distance * 2) / 2
+
+
+def format_distance_with_unit(distance: float) -> str:
+    """Formatuje odległość z jednostką, zaokrąglając do 0.5m."""
+    rounded_distance = round_distance_to_half_meter(distance)
+    return f"{rounded_distance:.1f} m"
 
 
 def create_arrow_pixmap(direction, color):
@@ -192,7 +252,8 @@ class MainWindow(QMainWindow):
             self.DESCRIPTION_IDX,
             self.SETTINGS_IDX,
             self.JUMP_REPLAY_IDX,
-        ) = range(8)
+            self.POINTS_BREAKDOWN_IDX,
+        ) = range(9)
 
         self.current_theme = "dark"
         self.contrast_level = 1.0
@@ -274,9 +335,29 @@ class MainWindow(QMainWindow):
                 QListWidget::indicator {{ width: 18px; height: 18px; border-radius: 4px; }}
                 QListWidget::indicator:unchecked {{ border: 1px solid #777777; background-color: #2a2a2a; }}
                 QListWidget::indicator:checked {{ border: 1px solid #0078d4; background-color: #0078d4; image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iI2ZmZmZmZiIgZD0iTTkgMTYuMTdMNC44MyAxMmwtMS40MSAxLjQxTDkgMTkgMjEgN2wtMS40MS0xLjQxeiIvPjwvc3ZnPg==); }}
-                QTableWidget::item {{ padding-left: 5px; }}
-                QTableWidget::item:hover {{ background-color: #{self.adjust_brightness("005ea6", contrast)}; }}
-                QHeaderView::section {{ background-color: #{self.adjust_brightness("3a3a3a", contrast)}; color: #{self.adjust_brightness("ffffff", contrast)}; padding: 8px; border: 1px solid #{self.adjust_brightness("4a4a4a", contrast)}; }}
+                QTableWidget {{ 
+                    border: 2px solid #{self.adjust_brightness("4a4a4a", contrast)}; 
+                    border-radius: 8px; 
+                    background-color: #{self.adjust_brightness("2a2a2a", contrast)}; 
+                    gridline-color: #{self.adjust_brightness("4a4a4a", contrast)}; 
+                    alternate-background-color: #{self.adjust_brightness("3a3a3a", contrast)}; 
+                }}
+                QTableWidget::item {{ 
+                    padding: 8px; 
+                    border: none; 
+                    background-color: #{self.adjust_brightness("2a2a2a", contrast)}; 
+                    color: #{self.adjust_brightness("ffffff", contrast)}; 
+                }}
+                QTableWidget::item:hover {{ background-color: #{self.adjust_brightness("0078d4", contrast)}; color: white; }}
+                QTableWidget::item:selected {{ background-color: #{self.adjust_brightness("005ea6", contrast)}; color: white; }}
+                QHeaderView::section {{ 
+                    background-color: #{self.adjust_brightness("3a3a3a", contrast)}; 
+                    color: #{self.adjust_brightness("ffffff", contrast)}; 
+                    padding: 10px; 
+                    border: 1px solid #{self.adjust_brightness("4a4a4a", contrast)}; 
+                    font-weight: bold; 
+                }}
+                QHeaderView::section:hover {{ background-color: #{self.adjust_brightness("4a4a4a", contrast)}; }}
                 QPushButton {{ background-color: #{self.adjust_brightness("0078d4", contrast)}; color: #{self.adjust_brightness("ffffff", contrast)}; border: none; padding: 15px; border-radius: 5px; font-size: 20px; font-family: 'Roboto', 'Segoe UI', Arial, sans-serif; }}
                 QPushButton:hover {{ background-color: #{self.adjust_brightness("005ea6", contrast)}; }}
                 QLabel#authorLabel {{ color: #{self.adjust_brightness("b0b0b0", contrast)}; padding: 0 10px 5px 0; }}
@@ -356,9 +437,29 @@ class MainWindow(QMainWindow):
                 QListWidget::indicator {{ width: 18px; height: 18px; border-radius: 4px; }}
                 QListWidget::indicator:unchecked {{ border: 1px solid #999999; background-color: #ffffff; }}
                 QListWidget::indicator:checked {{ border: 1px solid #0078d4; background-color: #0078d4; image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iI2ZmZmZmZiIgZD0iTTkgMTYuMTdMNC44MyAxMmwtMS40MSAxLjQxTDkgMTkgMjEgN2wtMS40MS0xLjQxeiIvPjwvc3ZnPg==); }}
-                QTableWidget::item {{ padding-left: 5px; }}
-                QTableWidget::item:hover {{ background-color: #{self.adjust_brightness("d0eaff", contrast)}; }}
-                QHeaderView::section {{ background-color: #{self.adjust_brightness("e9e9e9", contrast)}; color: #{self.adjust_brightness("1a1a1a", contrast)}; padding: 8px; border: 1px solid #{self.adjust_brightness("d0d0d0", contrast)}; }}
+                QTableWidget {{ 
+                    border: 2px solid #{self.adjust_brightness("d0d0d0", contrast)}; 
+                    border-radius: 8px; 
+                    background-color: #{self.adjust_brightness("ffffff", contrast)}; 
+                    gridline-color: #{self.adjust_brightness("d0d0d0", contrast)}; 
+                    alternate-background-color: #{self.adjust_brightness("f8f8f8", contrast)}; 
+                }}
+                QTableWidget::item {{ 
+                    padding: 8px; 
+                    border: none; 
+                    background-color: #{self.adjust_brightness("ffffff", contrast)}; 
+                    color: #{self.adjust_brightness("1a1a1a", contrast)}; 
+                }}
+                QTableWidget::item:hover {{ background-color: #{self.adjust_brightness("d0eaff", contrast)}; color: #{self.adjust_brightness("1a1a1a", contrast)}; }}
+                QTableWidget::item:selected {{ background-color: #{self.adjust_brightness("0078d4", contrast)}; color: white; }}
+                QHeaderView::section {{ 
+                    background-color: #{self.adjust_brightness("e9e9e9", contrast)}; 
+                    color: #{self.adjust_brightness("1a1a1a", contrast)}; 
+                    padding: 10px; 
+                    border: 1px solid #{self.adjust_brightness("d0d0d0", contrast)}; 
+                    font-weight: bold; 
+                }}
+                QHeaderView::section:hover {{ background-color: #{self.adjust_brightness("d0d0d0", contrast)}; }}
                 QPushButton {{ background-color: #{self.adjust_brightness("0078d4", contrast)}; color: #{self.adjust_brightness("ffffff", contrast)}; border: none; padding: 15px; border-radius: 5px; font-size: 20px; }}
                 QPushButton:hover {{ background-color: #{self.adjust_brightness("005ea6", contrast)}; }}
                 QLabel#authorLabel {{ color: #{self.adjust_brightness("404040", contrast)}; padding: 0 10px 5px 0; }}
@@ -434,6 +535,7 @@ class MainWindow(QMainWindow):
         self._create_description_page()
         self._create_settings_page()
         self._create_jump_replay_page()
+        self._create_points_breakdown_page()
 
     def _create_main_menu(self):
         widget = QWidget()
@@ -517,6 +619,20 @@ class MainWindow(QMainWindow):
         layout.addLayout(
             self._create_top_bar("Symulacja skoku", self.SIM_TYPE_MENU_IDX)
         )
+
+        # Główny layout z podziałem na sekcje
+        main_hbox = QHBoxLayout()
+
+        # Lewa sekcja - Konfiguracja skoku
+        left_panel = QVBoxLayout()
+        left_panel.setSpacing(15)
+
+        # Sekcja wyboru parametrów
+        config_group = QGroupBox("Konfiguracja skoku")
+        config_group_layout = QVBoxLayout(config_group)
+        config_group_layout.setSpacing(10)
+
+        # Wybór zawodnika
         self.jumper_combo = QComboBox()
         self.jumper_combo.addItem("Wybierz zawodnika")
         for jumper in self.all_jumpers:
@@ -524,7 +640,11 @@ class MainWindow(QMainWindow):
                 self.create_rounded_flag_icon(jumper.nationality), str(jumper)
             )
         self.jumper_combo.currentIndexChanged.connect(self.update_jumper)
-        layout.addLayout(self._create_form_row("Zawodnik:", self.jumper_combo))
+        config_group_layout.addLayout(
+            self._create_form_row("Zawodnik:", self.jumper_combo)
+        )
+
+        # Wybór skoczni
         self.hill_combo = QComboBox()
         self.hill_combo.addItem("Wybierz skocznię")
         for hill in self.all_hills:
@@ -532,28 +652,111 @@ class MainWindow(QMainWindow):
                 self.create_rounded_flag_icon(hill.country), str(hill)
             )
         self.hill_combo.currentIndexChanged.connect(self.update_hill)
-        layout.addLayout(self._create_form_row("Skocznia:", self.hill_combo))
+        config_group_layout.addLayout(
+            self._create_form_row("Skocznia:", self.hill_combo)
+        )
+
+        # Wybór belki
         self.gate_spin = QSpinBox()
         self.gate_spin.setMinimum(1)
         self.gate_spin.setMaximum(1)
-        layout.addLayout(self._create_form_row("Belka:", self.gate_spin))
+        config_group_layout.addLayout(self._create_form_row("Belka:", self.gate_spin))
+
+        # Przyciski akcji
         btn_layout = QHBoxLayout()
         self.simulate_button = QPushButton("Uruchom symulację")
+        self.simulate_button.setStyleSheet("""
+            QPushButton {
+                background-color: #0078d4;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 6px;
+                font-weight: bold;
+                font-size: 16px;
+            }
+            QPushButton:hover {
+                background-color: #005ea6;
+            }
+            QPushButton:pressed {
+                background-color: #004578;
+            }
+        """)
         self.simulate_button.clicked.connect(self.run_simulation)
+
         self.clear_button = QPushButton("Wyczyść")
+        self.clear_button.setStyleSheet("""
+            QPushButton {
+                background-color: #6c757d;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 6px;
+                font-weight: bold;
+                font-size: 16px;
+            }
+            QPushButton:hover {
+                background-color: #5a6268;
+            }
+            QPushButton:pressed {
+                background-color: #495057;
+            }
+        """)
         self.clear_button.clicked.connect(self.clear_results)
+
         btn_layout.addWidget(self.simulate_button)
         btn_layout.addWidget(self.clear_button)
-        layout.addLayout(btn_layout)
-        self.result_text = QTextEdit()
-        self.result_text.setReadOnly(True)
-        self.result_text.setFixedHeight(80)
-        layout.addWidget(self.result_text)
+        config_group_layout.addLayout(btn_layout)
+
+        left_panel.addWidget(config_group)
+
+        # Sekcja statystyk
+        stats_group = QGroupBox("Statystyki skoku")
+        stats_group_layout = QVBoxLayout(stats_group)
+        stats_group_layout.setSpacing(10)
+
+        # Label na statystyki (zamiast QTextEdit)
+        self.single_jump_stats_label = QLabel(
+            "Wybierz zawodnika i skocznię, aby rozpocząć symulację"
+        )
+        self.single_jump_stats_label.setStyleSheet("""
+            QLabel {
+                color: #0078d4;
+                font-size: 14px;
+                padding: 15px;
+                background-color: rgba(0, 120, 212, 0.1);
+                border-radius: 8px;
+                border: 2px solid rgba(0, 120, 212, 0.3);
+            }
+        """)
+        self.single_jump_stats_label.setWordWrap(True)
+        self.single_jump_stats_label.setAlignment(Qt.AlignCenter)
+        stats_group_layout.addWidget(self.single_jump_stats_label)
+
+        left_panel.addWidget(stats_group)
+        left_panel.addStretch()
+
+        main_hbox.addLayout(left_panel, 1)
+
+        # Prawa sekcja - Animacja
+        right_panel = QVBoxLayout()
+        right_panel.setSpacing(10)
+
+        animation_group = QGroupBox("Animacja trajektorii")
+        animation_group_layout = QVBoxLayout(animation_group)
+
         self.figure = Figure(
             facecolor=f"#{self.adjust_brightness('1a1a1a', self.contrast_level)}"
         )
         self.canvas = FigureCanvas(self.figure)
-        layout.addWidget(self.canvas)
+        animation_group_layout.addWidget(self.canvas)
+
+        right_panel.addWidget(animation_group)
+        right_panel.addStretch()
+
+        main_hbox.addLayout(right_panel, 2)
+
+        layout.addLayout(main_hbox)
         self.central_widget.addWidget(widget)
 
     def _create_competition_page(self):
@@ -562,21 +765,86 @@ class MainWindow(QMainWindow):
         layout.setSpacing(20)
         layout.setContentsMargins(50, 20, 50, 50)
         layout.addLayout(self._create_top_bar("Zawody", self.SIM_TYPE_MENU_IDX))
+
+        # Główny layout z podziałem na sekcje
         main_hbox = QHBoxLayout()
-        options_vbox = QVBoxLayout()
-        select_all_layout = QHBoxLayout()
+
+        # Lewa sekcja - Konfiguracja zawodów
+        left_panel = QVBoxLayout()
+        left_panel.setSpacing(15)
+
+        # Sekcja wyboru zawodników
+        jumper_group = QGroupBox("Wybór zawodników")
+        jumper_group_layout = QVBoxLayout(jumper_group)
+        jumper_group_layout.setSpacing(10)
+
+        # Kontrolki wyboru zawodników
+        jumper_controls_layout = QHBoxLayout()
         self.toggle_all_button = QPushButton("Zaznacz wszystkich")
+        self.toggle_all_button.setStyleSheet("""
+            QPushButton {
+                background-color: #0078d4;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #005ea6;
+            }
+        """)
         self.toggle_all_button.clicked.connect(self._toggle_all_jumpers)
-        select_all_layout.addWidget(self.toggle_all_button)
-        options_vbox.addLayout(select_all_layout)
+        jumper_controls_layout.addWidget(self.toggle_all_button)
+
+        # Licznik wybranych zawodników
+        self.selected_count_label = QLabel("Wybrano: 0 zawodników")
+        self.selected_count_label.setStyleSheet("""
+            QLabel {
+                color: #0078d4;
+                font-weight: bold;
+                padding: 8px;
+                background-color: rgba(0, 120, 212, 0.1);
+                border-radius: 4px;
+            }
+        """)
+        jumper_controls_layout.addWidget(self.selected_count_label)
+        jumper_group_layout.addLayout(jumper_controls_layout)
+
+        # Sortowanie zawodników
         sort_layout = QHBoxLayout()
         sort_layout.addWidget(QLabel("Sortuj:"))
         self.sort_combo = QComboBox()
         self.sort_combo.addItems(["Wg Nazwiska (A-Z)", "Wg Kraju"])
         self.sort_combo.currentTextChanged.connect(self._sort_jumper_list)
         sort_layout.addWidget(self.sort_combo)
-        options_vbox.addLayout(sort_layout)
+        jumper_group_layout.addLayout(sort_layout)
+
+        # Lista zawodników z lepszym stylem
         self.jumper_list_widget = QListWidget()
+        self.jumper_list_widget.setStyleSheet("""
+            QListWidget {
+                border: 2px solid #4a4a4a;
+                border-radius: 8px;
+                background-color: #2a2a2a;
+                padding: 5px;
+            }
+            QListWidget::item {
+                padding: 8px;
+                margin: 2px;
+                border-radius: 4px;
+                background-color: transparent;
+            }
+            QListWidget::item:hover {
+                background-color: #3a3a3a;
+            }
+            QListWidget::item:selected {
+                background-color: #0078d4;
+                color: white;
+            }
+        """)
+        self.jumper_list_widget.setMaximumHeight(300)
+
         for jumper in self.all_jumpers:
             item = QListWidgetItem(
                 self.create_rounded_flag_icon(jumper.nationality), str(jumper)
@@ -586,7 +854,18 @@ class MainWindow(QMainWindow):
             item.setData(Qt.UserRole, jumper)
             self.jumper_list_widget.addItem(item)
         self.jumper_list_widget.itemChanged.connect(self._on_jumper_item_changed)
-        options_vbox.addWidget(self.jumper_list_widget)
+        jumper_group_layout.addWidget(self.jumper_list_widget)
+
+        left_panel.addWidget(jumper_group)
+
+        # Sekcja konfiguracji zawodów
+        competition_group = QGroupBox("Konfiguracja zawodów")
+        competition_group_layout = QVBoxLayout(competition_group)
+        competition_group_layout.setSpacing(15)
+
+        # Wybór skoczni z ikoną
+        hill_layout = QHBoxLayout()
+        hill_layout.addWidget(QLabel("Skocznia:"))
         self.comp_hill_combo = QComboBox()
         self.comp_hill_combo.addItem("Wybierz skocznię")
         for hill in self.all_hills:
@@ -594,29 +873,108 @@ class MainWindow(QMainWindow):
                 self.create_rounded_flag_icon(hill.country), str(hill)
             )
         self.comp_hill_combo.currentIndexChanged.connect(self.update_competition_hill)
-        options_vbox.addLayout(
-            self._create_form_row("2. Skocznia:", self.comp_hill_combo)
-        )
+        hill_layout.addWidget(self.comp_hill_combo)
+        competition_group_layout.addLayout(hill_layout)
+
+        # Wybór belki z ikoną
+        gate_layout = QHBoxLayout()
+        gate_layout.addWidget(QLabel("Belka:"))
         self.comp_gate_spin = QSpinBox()
         self.comp_gate_spin.setMinimum(1)
         self.comp_gate_spin.setMaximum(1)
-        options_vbox.addLayout(self._create_form_row("3. Belka:", self.comp_gate_spin))
+        gate_layout.addWidget(self.comp_gate_spin)
+        competition_group_layout.addLayout(gate_layout)
+
+        # Przycisk rozpoczęcia zawodów z lepszym stylem
         run_comp_btn = QPushButton("Rozpocznij zawody")
+        run_comp_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #28a745;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 6px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #218838;
+            }
+            QPushButton:pressed {
+                background-color: #1e7e34;
+            }
+        """)
         run_comp_btn.clicked.connect(self.run_competition)
-        options_vbox.addWidget(run_comp_btn)
-        options_vbox.addStretch()
-        main_hbox.addLayout(options_vbox, 1)
-        results_vbox = QVBoxLayout()
+        competition_group_layout.addWidget(run_comp_btn)
+
+        left_panel.addWidget(competition_group)
+        left_panel.addStretch()
+        main_hbox.addLayout(left_panel, 1)
+
+        # Prawa sekcja - Wyniki zawodów
+        results_panel = QVBoxLayout()
+        results_panel.setSpacing(15)
+
+        # Status zawodów z lepszym stylem
         self.competition_status_label = QLabel(
             "Tabela wyników (kliknij odległość, aby zobaczyć powtórkę):"
         )
-        results_vbox.addWidget(self.competition_status_label)
+
+        # Dodajemy informację o aktualnej serii
+        self.round_info_label = QLabel("Seria: 1/2")
+        self.round_info_label.setStyleSheet("""
+            QLabel {
+                color: #ffc107;
+                font-weight: bold;
+                font-size: 12px;
+                padding: 5px 10px;
+                background-color: rgba(255, 193, 7, 0.1);
+                border-radius: 4px;
+                border: 1px solid #ffc107;
+            }
+        """)
+        self.round_info_label.setAlignment(Qt.AlignCenter)
+
+        # Layout dla statusu i informacji o serii
+        status_layout = QHBoxLayout()
+        status_layout.addWidget(self.competition_status_label, 3)
+        status_layout.addWidget(self.round_info_label, 1)
+        results_panel.addLayout(status_layout)
+
+        # Dodajemy pasek postępu
+        self.progress_label = QLabel("Postęp: 0%")
+        self.progress_label.setStyleSheet("""
+            QLabel {
+                color: #28a745;
+                font-weight: bold;
+                font-size: 12px;
+                padding: 5px 10px;
+                background-color: rgba(40, 167, 69, 0.1);
+                border-radius: 4px;
+                border: 1px solid #28a745;
+            }
+        """)
+        self.progress_label.setAlignment(Qt.AlignCenter)
+        results_panel.addWidget(self.progress_label)
+
+        # Tabela wyników z ulepszonym stylem
         self.results_table = QTableWidget()
-        self.results_table.setColumnCount(5)
+        self.results_table.setColumnCount(
+            8
+        )  # Miejsce, Flaga, Zawodnik, I seria (dystans), I seria (punkty), II seria (dystans), II seria (punkty), Suma (pkt)
         self.results_table.setHorizontalHeaderLabels(
-            ["Miejsce", "Kraj", "Zawodnik", "I seria", "II seria"]
+            [
+                "",
+                "",
+                "Zawodnik",
+                "I seria",
+                "I seria (pkt)",
+                "II seria",
+                "II seria (pkt)",
+                "Suma (pkt)",
+            ]
         )
-        self.results_table.verticalHeader().setDefaultSectionSize(40)
+        self.results_table.verticalHeader().setDefaultSectionSize(45)
         self.results_table.verticalHeader().setVisible(False)
         self.results_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.results_table.horizontalHeader().setSectionResizeMode(
@@ -631,8 +989,13 @@ class MainWindow(QMainWindow):
         self.results_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.results_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.results_table.cellClicked.connect(self._on_result_cell_clicked)
-        results_vbox.addWidget(self.results_table)
-        main_hbox.addLayout(results_vbox, 2)
+
+        # Styl tabeli wyników - będzie aktualizowany w update_styles()
+        self.results_table.setStyleSheet("")
+
+        results_panel.addWidget(self.results_table)
+        main_hbox.addLayout(results_panel, 2)
+
         layout.addLayout(main_hbox)
         self.central_widget.addWidget(widget)
 
@@ -1319,6 +1682,156 @@ class MainWindow(QMainWindow):
 
         self.central_widget.addWidget(widget)
 
+    def _create_points_breakdown_page(self):
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(15)
+        layout.setContentsMargins(50, 20, 50, 50)
+
+        layout.addLayout(self._create_top_bar("Podział punktów", self.COMPETITION_IDX))
+
+        # Tytuł z informacjami o zawodniku
+        self.points_title_label = QLabel("Imię i nazwisko skoczka")
+        self.points_title_label.setObjectName("replayTitleLabel")
+        self.points_title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.points_title_label)
+
+        self.points_info_label = QLabel("Informacje o skoku")
+        self.points_info_label.setObjectName("replayStatsLabel")
+        self.points_info_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.points_info_label)
+
+        # Główny layout z podziałem na dwie kolumny
+        main_hbox = QHBoxLayout()
+
+        # Lewa kolumna - Podział punktów
+        points_panel = QVBoxLayout()
+        points_panel.setSpacing(15)
+
+        # Tabela z podziałem punktów
+        self.points_breakdown_table = QTableWidget()
+        self.points_breakdown_table.setColumnCount(3)
+        self.points_breakdown_table.setRowCount(4)
+        self.points_breakdown_table.setHorizontalHeaderLabels(
+            ["Element", "Wartość", "Punkty"]
+        )
+        self.points_breakdown_table.verticalHeader().setVisible(False)
+        self.points_breakdown_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.Stretch
+        )
+        self.points_breakdown_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        # Styl tabeli breakdown - będzie aktualizowany w update_styles()
+        self.points_breakdown_table.setStyleSheet("")
+        points_panel.addWidget(self.points_breakdown_table)
+
+        # Formuła obliczeniowa
+        self.points_formula_group = QGroupBox("Formuła obliczeniowa")
+        self.points_formula_group.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                color: #ffffff;
+                border: 2px solid #4a4a4a;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
+        formula_layout = QVBoxLayout(self.points_formula_group)
+
+        self.points_formula_text = QLabel(
+            "Punkty = 60.0 + (różnica od K-point × meter value)"
+        )
+        self.points_formula_text.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                color: #ffffff;
+                padding: 10px;
+                background-color: #3a3a3a;
+                border-radius: 6px;
+            }
+        """)
+        self.points_formula_text.setAlignment(Qt.AlignCenter)
+        formula_layout.addWidget(self.points_formula_text)
+
+        # Konkretne obliczenia
+        self.points_calculation_text = QLabel()
+        self.points_calculation_text.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                color: #059669;
+                padding: 10px;
+                background-color: rgba(5, 150, 105, 0.1);
+                border-radius: 6px;
+                font-weight: bold;
+            }
+        """)
+        self.points_calculation_text.setAlignment(Qt.AlignCenter)
+        formula_layout.addWidget(self.points_calculation_text)
+
+        points_panel.addWidget(self.points_formula_group)
+
+        # Informacje o skoczni
+        self.points_hill_info_group = QGroupBox("Informacje o skoczni")
+        self.points_hill_info_group.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                color: #ffffff;
+                border: 2px solid #4a4a4a;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
+        hill_info_layout = QVBoxLayout(self.points_hill_info_group)
+
+        self.points_hill_name = QLabel()
+        self.points_hill_name.setStyleSheet("""
+            QLabel {
+                font-size: 12px;
+                color: #ffffff;
+                padding: 5px;
+            }
+        """)
+        hill_info_layout.addWidget(self.points_hill_name)
+
+        self.points_gate_info = QLabel()
+        self.points_gate_info.setStyleSheet("""
+            QLabel {
+                font-size: 12px;
+                color: #ffffff;
+                padding: 5px;
+            }
+        """)
+        hill_info_layout.addWidget(self.points_gate_info)
+
+        points_panel.addWidget(self.points_hill_info_group)
+        points_panel.addStretch()
+        main_hbox.addLayout(points_panel, 1)
+
+        # Prawa kolumna - Animacja trajektorii w tle
+        animation_panel = QVBoxLayout()
+
+        self.points_figure = Figure(
+            facecolor=f"#{self.adjust_brightness('1a1a1a', self.contrast_level)}"
+        )
+        self.points_canvas = FigureCanvas(self.points_figure)
+        animation_panel.addWidget(self.points_canvas)
+
+        main_hbox.addLayout(animation_panel, 2)
+        layout.addLayout(main_hbox)
+
+        self.central_widget.addWidget(widget)
+
     def _create_description_page(self):
         widget = QWidget()
         layout = QVBoxLayout(widget)
@@ -1340,7 +1853,12 @@ class MainWindow(QMainWindow):
         layout.addLayout(self._create_top_bar("Ustawienia", self.MAIN_MENU_IDX))
 
         self.theme_combo = QComboBox()
-        self.theme_combo.addItems(["Ciemny", "Jasny"])
+        self.theme_combo.addItems(
+            [
+                "Ciemny",
+                "Jasny",
+            ]
+        )
         self.theme_combo.currentTextChanged.connect(self.change_theme)
         layout.addLayout(self._create_form_row("Motyw:", self.theme_combo))
 
@@ -1413,6 +1931,31 @@ class MainWindow(QMainWindow):
             if jumper in self.selection_order:
                 self.selection_order.remove(jumper)
 
+        # Aktualizuj licznik wybranych zawodników
+        if hasattr(self, "selected_count_label"):
+            count = len(self.selection_order)
+            self.selected_count_label.setText(f"Wybrano: {count} zawodników")
+            if count > 0:
+                self.selected_count_label.setStyleSheet("""
+                    QLabel {
+                        color: #28a745;
+                        font-weight: bold;
+                        padding: 8px;
+                        background-color: rgba(40, 167, 69, 0.1);
+                        border-radius: 4px;
+                    }
+                """)
+            else:
+                self.selected_count_label.setStyleSheet("""
+                    QLabel {
+                        color: #0078d4;
+                        font-weight: bold;
+                        padding: 8px;
+                        background-color: rgba(0, 120, 212, 0.1);
+                        border-radius: 4px;
+                    }
+                """)
+
     def _toggle_all_jumpers(self):
         self.play_sound()
         checked_count = sum(
@@ -1423,10 +1966,36 @@ class MainWindow(QMainWindow):
 
         if checked_count < self.jumper_list_widget.count():
             new_state = Qt.Checked
-            self.toggle_all_button.setText("Odznacz wszystkich")
+            self.toggle_all_button.setText("☐ Odznacz wszystkich")
+            self.toggle_all_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #dc3545;
+                    color: white;
+                    border: none;
+                    padding: 8px 16px;
+                    border-radius: 4px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #c82333;
+                }
+            """)
         else:
             new_state = Qt.Unchecked
             self.toggle_all_button.setText("Zaznacz wszystkich")
+            self.toggle_all_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #0078d4;
+                    color: white;
+                    border: none;
+                    padding: 8px 16px;
+                    border-radius: 4px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #005ea6;
+                }
+            """)
 
         self.jumper_list_widget.itemChanged.disconnect(self._on_jumper_item_changed)
         for i in range(self.jumper_list_widget.count()):
@@ -1439,6 +2008,31 @@ class MainWindow(QMainWindow):
                 self.jumper_list_widget.item(i).data(Qt.UserRole)
                 for i in range(self.jumper_list_widget.count())
             ]
+
+        # Aktualizuj licznik wybranych zawodników po zmianie stanu
+        if hasattr(self, "selected_count_label"):
+            count = len(self.selection_order)
+            self.selected_count_label.setText(f"Wybrano: {count} zawodników")
+            if count > 0:
+                self.selected_count_label.setStyleSheet("""
+                    QLabel {
+                        color: #28a745;
+                        font-weight: bold;
+                        padding: 8px;
+                        background-color: rgba(40, 167, 69, 0.1);
+                        border-radius: 4px;
+                    }
+                """)
+            else:
+                self.selected_count_label.setStyleSheet("""
+                    QLabel {
+                        color: #0078d4;
+                        font-weight: bold;
+                        padding: 8px;
+                        background-color: rgba(0, 120, 212, 0.1);
+                        border-radius: 4px;
+                    }
+                """)
 
     def _sort_jumper_list(self, sort_text):
         items_data = []
@@ -1469,40 +2063,82 @@ class MainWindow(QMainWindow):
 
     def _on_result_cell_clicked(self, row, column):
         self.play_sound()
-        if column not in [3, 4]:
-            return
+
         if row >= len(self.competition_results):
             return
 
         result_data = self.competition_results[row]
         jumper = result_data["jumper"]
 
-        seria_num = 1 if column == 3 else 2
-        distance_str = self.results_table.item(row, column).text()
+        # Kolumny z dystansami to 3 (I seria) i 5 (II seria)
+        if column in [3, 5]:
+            seria_num = 1 if column == 3 else 2
+            distance_str = self.results_table.item(row, column).text()
 
-        if distance_str == "-":
-            return
+            if distance_str == "-":
+                return
 
-        try:
-            distance = float(distance_str)
-            self._show_jump_replay(
-                jumper,
-                self.competition_hill,
-                self.competition_gate,
-                distance,
-                seria_num,
-            )
-        except (ValueError, TypeError):
-            return
+            try:
+                # Extract distance value from format like "123.5 m"
+                distance = float(distance_str.replace(" m", ""))
+                self._show_jump_replay(
+                    jumper,
+                    self.competition_hill,
+                    self.competition_gate,
+                    distance,
+                    seria_num,
+                )
+            except (ValueError, TypeError):
+                return
+
+        # Kolumny z punktami to 4 (I seria) i 6 (II seria)
+        elif column in [4, 6]:
+            seria_num = 1 if column == 4 else 2
+            points_str = self.results_table.item(row, column).text()
+
+            if points_str == "-":
+                return
+
+            try:
+                points = float(points_str)
+                distance = result_data[f"d{seria_num}"]
+                self._show_points_breakdown(
+                    jumper,
+                    distance,
+                    points,
+                    seria_num,
+                )
+            except (ValueError, TypeError):
+                return
+
+        # Kolumna z sumą punktów to 7
+        elif column == 7:
+            total_points_str = self.results_table.item(row, column).text()
+
+            if total_points_str == "-":
+                return
+
+            try:
+                total_points = float(total_points_str)
+                self._show_total_points_breakdown(
+                    jumper,
+                    result_data,
+                    total_points,
+                )
+            except (ValueError, TypeError):
+                return
 
     def _show_jump_replay(self, jumper, hill, gate, distance, seria_num):
         sim_data = self._calculate_trajectory(jumper, hill, gate)
 
         self.replay_title_label.setText(f"{jumper} - Seria {seria_num}")
         stats_text = (
-            f"Odległość: {distance:.2f} m  |  "
+            f"Odległość: {format_distance_with_unit(distance)}  |  "
             f"Prędkość na progu: {sim_data['inrun_velocity_kmh']:.2f} km/h  |  "
-            f"Kąt wybicia: {sim_data['takeoff_angle_deg']:.2f}°"
+            f"Kąt wybicia: {sim_data['takeoff_angle_deg']:.2f}°  |  "
+            f"Max wysokość: {sim_data['max_height']:.1f} m  |  "
+            f"Czas lotu: {sim_data['flight_time']:.2f} s  |  "
+            f"Max prędkość: {sim_data['max_velocity_kmh']:.1f} km/h"
         )
         self.replay_stats_label.setText(stats_text)
 
@@ -1510,6 +2146,216 @@ class MainWindow(QMainWindow):
         self._run_animation_on_canvas(
             self.replay_canvas, self.replay_figure, sim_data, hill
         )
+
+    def _show_points_breakdown(self, jumper, distance, points, seria_num):
+        """Wyświetla szczegółowy podział punktów za skok na pełnej stronie z animacją w tle."""
+        k_point = self.competition_hill.K
+        meter_value = get_meter_value(k_point)
+        difference = distance - k_point
+
+        # Aktualizuj tytuł i informacje
+        self.points_title_label.setText(f"{jumper} - Seria {seria_num}")
+        stats_text = (
+            f"Odległość: {format_distance_with_unit(distance)}  |  "
+            f"Punkty: {points:.1f} pkt  |  "
+            f"K-point: {k_point:.1f} m"
+        )
+        self.points_info_label.setText(stats_text)
+
+        # Wypełnij tabelę danymi
+        data = [
+            ("Odległość skoku", format_distance_with_unit(distance), ""),
+            ("Punkt K skoczni", f"{k_point:.1f} m", ""),
+            ("Różnica od K-point", f"{difference:+.1f} m", ""),
+            ("Meter value", f"{meter_value:.1f} pkt/m", ""),
+        ]
+
+        # Oblicz punkty dla każdego elementu
+        base_points = 60.0
+        distance_points = base_points
+        k_point_points = 0  # K-point to punkt odniesienia
+        difference_points = difference * meter_value
+        meter_value_points = 0  # Meter value to współczynnik
+
+        points_data = [
+            (
+                "Odległość skoku",
+                format_distance_with_unit(distance),
+                f"{distance_points:.1f}",
+            ),
+            ("Punkt K skoczni", f"{k_point:.1f} m", f"{k_point_points:.1f}"),
+            ("Różnica od K-point", f"{difference:+.1f} m", f"{difference_points:+.1f}"),
+            ("Meter value", f"{meter_value:.1f} pkt/m", f"{meter_value_points:.1f}"),
+        ]
+
+        for row, (element, value, points_val) in enumerate(points_data):
+            element_item = QTableWidgetItem(element)
+            element_item.setBackground(QColor("#3a3a3a"))
+            element_item.setForeground(QColor("#ffffff"))
+            self.points_breakdown_table.setItem(row, 0, element_item)
+
+            value_item = QTableWidgetItem(value)
+            value_item.setBackground(QColor("#2a2a2a"))
+            value_item.setForeground(QColor("#ffffff"))
+            value_item.setTextAlignment(Qt.AlignCenter)
+            self.points_breakdown_table.setItem(row, 1, value_item)
+
+            points_item = QTableWidgetItem(points_val)
+            points_item.setBackground(QColor("#2a2a2a"))
+            points_item.setForeground(QColor("#ffffff"))
+            points_item.setTextAlignment(Qt.AlignCenter)
+            self.points_breakdown_table.setItem(row, 2, points_item)
+
+        # Aktualizuj konkretne obliczenia
+        self.points_calculation_text.setText(
+            f"Punkty = 60.0 + ({difference:+.1f} × {meter_value:.1f}) = {points:.1f}"
+        )
+
+        # Aktualizuj informacje o skoczni
+        self.points_hill_name.setText(f"Skocznia: {self.competition_hill}")
+        self.points_gate_info.setText(f"Belka startowa: {self.competition_gate}")
+
+        # Uruchom animację trajektorii w tle
+        sim_data = self._calculate_trajectory(
+            jumper, self.competition_hill, self.competition_gate
+        )
+        self._run_animation_on_canvas(
+            self.points_canvas, self.points_figure, sim_data, self.competition_hill
+        )
+
+        # Przełącz na stronę podziału punktów
+        self.central_widget.setCurrentIndex(self.POINTS_BREAKDOWN_IDX)
+
+    def _show_total_points_breakdown(self, jumper, result_data, total_points):
+        """Wyświetla szczegółowy podział punktów za obie serie na pełnej stronie z animacją w tle."""
+        k_point = self.competition_hill.K
+        meter_value = get_meter_value(k_point)
+
+        # Aktualizuj tytuł i informacje
+        self.points_title_label.setText(f"{jumper} - Podsumowanie zawodów")
+        stats_text = (
+            f"Suma punktów: {total_points:.1f} pkt  |  "
+            f"K-point: {k_point:.1f} m  |  "
+            f"Meter value: {meter_value:.1f} pkt/m"
+        )
+        self.points_info_label.setText(stats_text)
+
+        # Przygotuj dane dla obu serii
+        series_data = []
+        if result_data.get("d1", 0) > 0 and result_data.get("p1", 0) > 0:
+            d1 = result_data["d1"]
+            p1 = result_data["p1"]
+            diff1 = d1 - k_point
+            series_data.append(("I seria", d1, p1, diff1))
+
+        if result_data.get("d2", 0) > 0 and result_data.get("p2", 0) > 0:
+            d2 = result_data["d2"]
+            p2 = result_data["p2"]
+            diff2 = d2 - k_point
+            series_data.append(("II seria", d2, p2, diff2))
+
+        # Wypełnij tabelę danymi
+        points_data = []
+
+        # Dodaj wiersze dla każdej serii
+        for seria_name, distance, points, difference in series_data:
+            points_data.append(
+                (
+                    f"{seria_name} - Odległość",
+                    format_distance_with_unit(distance),
+                    f"{points:.1f}",
+                )
+            )
+            points_data.append(
+                (
+                    f"{seria_name} - Różnica od K-point",
+                    f"{difference:+.1f} m",
+                    f"{difference * meter_value:+.1f}",
+                )
+            )
+            points_data.append(
+                (f"{seria_name} - Punkty", f"{points:.1f} pkt", f"{points:.1f}")
+            )
+            # Dodaj pusty wiersz jako separator
+            points_data.append(("", "", ""))
+
+        # Dodaj wiersz z sumą
+        if len(series_data) > 0:
+            points_data.append(
+                ("SUMA PUNKTÓW", f"{total_points:.1f} pkt", f"{total_points:.1f}")
+            )
+
+        # Wyczyść tabelę i ustaw odpowiednią liczbę wierszy
+        self.points_breakdown_table.setRowCount(len(points_data))
+
+        for row, (element, value, points_val) in enumerate(points_data):
+            element_item = QTableWidgetItem(element)
+            if element == "SUMA PUNKTÓW":
+                element_item.setBackground(QColor("#dc3545"))
+                element_item.setForeground(QColor("#ffffff"))
+                element_item.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+            elif element == "":
+                element_item.setBackground(QColor("#1a1a1a"))
+                element_item.setForeground(QColor("#1a1a1a"))
+            else:
+                element_item.setBackground(QColor("#3a3a3a"))
+                element_item.setForeground(QColor("#ffffff"))
+            self.points_breakdown_table.setItem(row, 0, element_item)
+
+            value_item = QTableWidgetItem(value)
+            if element == "SUMA PUNKTÓW":
+                value_item.setBackground(QColor("#dc3545"))
+                value_item.setForeground(QColor("#ffffff"))
+                value_item.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+            elif element == "":
+                value_item.setBackground(QColor("#1a1a1a"))
+                value_item.setForeground(QColor("#1a1a1a"))
+            else:
+                value_item.setBackground(QColor("#2a2a2a"))
+                value_item.setForeground(QColor("#ffffff"))
+            value_item.setTextAlignment(Qt.AlignCenter)
+            self.points_breakdown_table.setItem(row, 1, value_item)
+
+            points_item = QTableWidgetItem(points_val)
+            if element == "SUMA PUNKTÓW":
+                points_item.setBackground(QColor("#dc3545"))
+                points_item.setForeground(QColor("#ffffff"))
+                points_item.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+            elif element == "":
+                points_item.setBackground(QColor("#1a1a1a"))
+                points_item.setForeground(QColor("#1a1a1a"))
+            else:
+                points_item.setBackground(QColor("#2a2a2a"))
+                points_item.setForeground(QColor("#ffffff"))
+            points_item.setTextAlignment(Qt.AlignCenter)
+            self.points_breakdown_table.setItem(row, 2, points_item)
+
+        # Aktualizuj informacje o skoczni
+        self.points_hill_name.setText(f"Skocznia: {self.competition_hill}")
+        self.points_gate_info.setText(f"Belka startowa: {self.competition_gate}")
+
+        # Aktualizuj formułę obliczeniową
+        calculation_text = "Formuła obliczeniowa:\n"
+        if len(series_data) == 2:
+            calculation_text += f"Suma punktów = {series_data[0][2]:.1f} pkt (I seria) + {series_data[1][2]:.1f} pkt (II seria) = {total_points:.1f} pkt"
+        elif len(series_data) == 1:
+            calculation_text += f"Suma punktów = {series_data[0][2]:.1f} pkt ({series_data[0][0]}) = {total_points:.1f} pkt"
+        else:
+            calculation_text += f"Suma punktów = {total_points:.1f} pkt"
+
+        self.points_calculation_text.setText(calculation_text)
+
+        # Uruchom animację trajektorii w tle (użyj pierwszej serii jeśli dostępna)
+        if result_data.get("d1", 0) > 0:
+            sim_data = self._calculate_trajectory(
+                jumper, self.competition_hill, self.competition_gate
+            )
+            self._run_animation_on_canvas(
+                self.points_canvas, self.points_figure, sim_data, self.competition_hill
+            )
+
+        # Przełącz na stronę podziału punktów
+        self.central_widget.setCurrentIndex(self.POINTS_BREAKDOWN_IDX)
 
     def _calculate_trajectory(self, jumper, hill, gate):
         inrun_velocity = inrun_simulation(hill, jumper, gate_number=gate)
@@ -1532,6 +2378,7 @@ class MainWindow(QMainWindow):
             effective_cl = base_cl + lift_bonus
 
         positions = [(0, 0)]
+        velocities = []
         current_position_x, current_position_y = 0, 0
         initial_total_velocity = inrun_velocity
 
@@ -1555,12 +2402,14 @@ class MainWindow(QMainWindow):
             hill.n + hill.a_finish + 100
         )  # Zwiększ limit aby pokazać całą skocznię
         max_height = 0
+        flight_time = 0
 
         while (
             current_position_y > hill.y_landing(current_position_x)
             and current_position_x < max_hill_length
         ):
             total_velocity = math.sqrt(current_velocity_x**2 + current_velocity_y**2)
+            velocities.append(total_velocity)
             angle_of_flight_rad = math.atan2(current_velocity_y, current_velocity_x)
             force_g_y = -jumper.mass * 9.81
 
@@ -1582,13 +2431,22 @@ class MainWindow(QMainWindow):
             current_velocity_y += acceleration_y * time_step
             current_position_x += current_velocity_x * time_step
             current_position_y += current_velocity_y * time_step
-            max_height = max(max_height, current_position_y)
+            # Calculate height above the landing area
+            height_above_landing = current_position_y - hill.y_landing(
+                current_position_x
+            )
+            max_height = max(max_height, height_above_landing)
+            flight_time += time_step
             positions.append((current_position_x, current_position_y))
 
         x_landing = np.linspace(
             0, hill.n + hill.a_finish + 50, 100
         )  # Zawsze pokazuj całą skocznię
         y_landing = [hill.y_landing(x_val) for x_val in x_landing]
+
+        # Calculate additional statistics
+        max_velocity = max(velocities) if velocities else 0
+        avg_velocity = sum(velocities) / len(velocities) if velocities else 0
 
         return {
             "positions": positions,
@@ -1598,6 +2456,9 @@ class MainWindow(QMainWindow):
             "max_hill_length": max_hill_length,
             "inrun_velocity_kmh": inrun_velocity * 3.6,
             "takeoff_angle_deg": math.degrees(takeoff_angle_rad),
+            "flight_time": flight_time,
+            "max_velocity_kmh": max_velocity * 3.6,
+            "avg_velocity_kmh": avg_velocity * 3.6,
         }
 
     def _run_animation_on_canvas(self, canvas, figure, sim_data, hill):
@@ -1670,7 +2531,19 @@ class MainWindow(QMainWindow):
     def run_simulation(self):
         self.play_sound()
         if not self.selected_jumper or not self.selected_hill:
-            self.result_text.setText("BŁĄD: Musisz wybrać zawodnika i skocznię!")
+            self.single_jump_stats_label.setText(
+                "BŁĄD: Musisz wybrać zawodnika i skocznię!"
+            )
+            self.single_jump_stats_label.setStyleSheet("""
+                QLabel {
+                    color: #dc3545;
+                    font-size: 14px;
+                    padding: 15px;
+                    background-color: rgba(220, 53, 69, 0.1);
+                    border-radius: 8px;
+                    border: 2px solid rgba(220, 53, 69, 0.3);
+                }
+            """)
             return
         gate = self.gate_spin.value()
 
@@ -1678,19 +2551,53 @@ class MainWindow(QMainWindow):
             sim_data = self._calculate_trajectory(
                 self.selected_jumper, self.selected_hill, gate
             )
-            distance = fly_simulation(self.selected_hill, self.selected_jumper, gate)
-
-            self.result_text.setText(
-                f"Prędkość na progu: {sim_data['inrun_velocity_kmh']:.2f} km/h\n"
-                f"Odległość: {distance:.2f} m"
+            raw_distance = fly_simulation(
+                self.selected_hill, self.selected_jumper, gate
             )
+            distance = round_distance_to_half_meter(raw_distance)
+
+            # Oblicz punkty za skok
+            points = calculate_jump_points(distance, self.selected_hill.K)
+
+            # Wyświetl statystyki w tym samym stylu co w zawodach
+            stats_text = (
+                f"Odległość: {format_distance_with_unit(distance)}  |  "
+                f"Prędkość na progu: {sim_data['inrun_velocity_kmh']:.2f} km/h  |  "
+                f"Kąt wybicia: {sim_data['takeoff_angle_deg']:.2f}°  |  "
+                f"Max wysokość: {sim_data['max_height']:.1f} m  |  "
+                f"Czas lotu: {sim_data['flight_time']:.2f} s  |  "
+                f"Max prędkość: {sim_data['max_velocity_kmh']:.1f} km/h  |  "
+                f"Punkty: {points:.1f} pkt"
+            )
+
+            self.single_jump_stats_label.setText(stats_text)
+            self.single_jump_stats_label.setStyleSheet("""
+                QLabel {
+                    color: #28a745;
+                    font-size: 14px;
+                    padding: 15px;
+                    background-color: rgba(40, 167, 69, 0.1);
+                    border-radius: 8px;
+                    border: 2px solid rgba(40, 167, 69, 0.3);
+                }
+            """)
 
             self._run_animation_on_canvas(
                 self.canvas, self.figure, sim_data, self.selected_hill
             )
 
         except ValueError as e:
-            self.result_text.setText(f"BŁĄD: {str(e)}")
+            self.single_jump_stats_label.setText(f"BŁĄD: {str(e)}")
+            self.single_jump_stats_label.setStyleSheet("""
+                QLabel {
+                    color: #dc3545;
+                    font-size: 14px;
+                    padding: 15px;
+                    background-color: rgba(220, 53, 69, 0.1);
+                    border-radius: 8px;
+                    border: 2px solid rgba(220, 53, 69, 0.3);
+                }
+            """)
 
     def play_sound(self):
         if hasattr(self, "sound_loaded") and self.sound_loaded:
@@ -1733,7 +2640,19 @@ class MainWindow(QMainWindow):
         self.jumper_combo.setCurrentIndex(0)
         self.hill_combo.setCurrentIndex(0)
         self.gate_spin.setValue(1)
-        self.result_text.clear()
+        self.single_jump_stats_label.setText(
+            "Wybierz zawodnika i skocznię, aby rozpocząć symulację"
+        )
+        self.single_jump_stats_label.setStyleSheet("""
+            QLabel {
+                color: #0078d4;
+                font-size: 14px;
+                padding: 15px;
+                background-color: rgba(0, 120, 212, 0.1);
+                border-radius: 8px;
+                border: 2px solid rgba(0, 120, 212, 0.3);
+            }
+        """)
         if hasattr(self, "figure"):
             self.figure.clear()
             self.canvas.draw()
@@ -1742,7 +2661,11 @@ class MainWindow(QMainWindow):
             self.ani = None
 
     def change_theme(self, theme):
-        self.current_theme = "dark" if theme == "Ciemny" else "light"
+        theme_mapping = {
+            "Ciemny": "dark",
+            "Jasny": "light",
+        }
+        self.current_theme = theme_mapping.get(theme, "dark")
         self.update_styles()
 
     def change_contrast(self):
@@ -1756,6 +2679,7 @@ class MainWindow(QMainWindow):
 
     def update_styles(self):
         self.setStyleSheet(self.themes[self.current_theme](self.contrast_level))
+
         if hasattr(self, "figure"):
             self.figure.set_facecolor(
                 f"#{self.adjust_brightness('1a1a1a' if self.current_theme == 'dark' else 'f0f0f0', self.contrast_level)}"
@@ -1810,84 +2734,260 @@ class MainWindow(QMainWindow):
         hill_idx = self.comp_hill_combo.currentIndex()
         if hill_idx == 0 or not self.selection_order:
             self.competition_status_label.setText(
-                "<font color='red'>BŁĄD: Wybierz skocznię i co najmniej jednego zawodnika!</font>"
+                "BŁĄD: Wybierz skocznię i co najmniej jednego zawodnika!"
             )
-            QTimer.singleShot(
-                3000,
-                lambda: self.competition_status_label.setText(
-                    "Tabela wyników (kliknij odległość, aby zobaczyć powtórkę):"
-                ),
-            )
+            self.competition_status_label.setStyleSheet("""
+                QLabel {
+                    color: #dc3545;
+                    font-weight: bold;
+                    font-size: 14px;
+                    padding: 10px;
+                    background-color: rgba(220, 53, 69, 0.1);
+                    border-radius: 6px;
+                    border-left: 4px solid #dc3545;
+                }
+            """)
+            QTimer.singleShot(3000, lambda: self._reset_status_label())
             return
+
+        # Reset status label style
+        self._reset_status_label()
+
         self.competition_hill = self.all_hills[hill_idx - 1]
         self.competition_gate = self.comp_gate_spin.value()
         self.competition_results = []
         self.current_jumper_index = 0
         self.current_round = 1
         self.competition_order = self.selection_order
+
+        # Aktualizuj informację o serii
+        if hasattr(self, "round_info_label"):
+            self.round_info_label.setText("Seria: 1/2")
+
+        # Reset postępu
+        if hasattr(self, "progress_label"):
+            self.progress_label.setText("Postęp: 0%")
+
         for jumper in self.selection_order:
-            self.competition_results.append({"jumper": jumper, "d1": 0.0, "d2": 0.0})
+            self.competition_results.append(
+                {
+                    "jumper": jumper,
+                    "d1": 0.0,
+                    "d2": 0.0,
+                    "p1": 0.0,  # Punkty za pierwszą serię
+                    "p2": 0.0,  # Punkty za drugą serię
+                }
+            )
+
         self.results_table.clearContents()
         self.results_table.setRowCount(len(self.competition_results))
         self._update_competition_table()
-        self.competition_status_label.setText("Rozpoczynanie 1. serii...")
+
+        # Lepszy komunikat rozpoczęcia
+        self.competition_status_label.setText(
+            f"Rozpoczynanie zawodów na {self.competition_hill.name}... "
+            f"({len(self.selection_order)} zawodników)"
+        )
+        self.competition_status_label.setStyleSheet("""
+            QLabel {
+                color: #28a745;
+                font-weight: bold;
+                font-size: 14px;
+                padding: 10px;
+                background-color: rgba(40, 167, 69, 0.1);
+                border-radius: 6px;
+                border-left: 4px solid #28a745;
+            }
+        """)
+
         QTimer.singleShot(500, self._process_next_jumper)
+
+    def _reset_status_label(self):
+        """Resetuje status label do domyślnego wyglądu"""
+        self.competition_status_label.setText(
+            "Tabela wyników (kliknij odległość, aby zobaczyć powtórkę):"
+        )
+        self.competition_status_label.setStyleSheet("""
+            QLabel {
+                color: #0078d4;
+                font-weight: bold;
+                font-size: 14px;
+                padding: 10px;
+                background-color: rgba(0, 120, 212, 0.1);
+                border-radius: 6px;
+                border-left: 4px solid #0078d4;
+            }
+        """)
 
     def _process_next_jumper(self):
         if self.current_jumper_index >= len(self.competition_order):
             if self.current_round == 1:
-                self.competition_status_label.setText(
-                    "Koniec 1. serii. Rozpoczynanie 2. serii..."
-                )
+                # Koniec pierwszej serii
+                self.competition_status_label.setText("Koniec 1. serii!")
+                self.competition_status_label.setStyleSheet("""
+                    QLabel {
+                        color: #ffc107;
+                        font-weight: bold;
+                        font-size: 14px;
+                        padding: 10px;
+                        background-color: rgba(255, 193, 7, 0.1);
+                        border-radius: 6px;
+                        border-left: 4px solid #ffc107;
+                    }
+                """)
+
                 self.current_round = 2
-                self.competition_results.sort(key=lambda x: x["d1"], reverse=True)
+                self.competition_results.sort(key=lambda x: x["p1"], reverse=True)
                 finalists = self.competition_results[:30]
                 finalists.reverse()
                 self.competition_order = [res["jumper"] for res in finalists]
                 self.current_jumper_index = 0
+
+                # Aktualizuj informację o serii
+                if hasattr(self, "round_info_label"):
+                    self.round_info_label.setText("Seria: 2/2")
+
+                # Reset postępu dla drugiej serii
+                if hasattr(self, "progress_label"):
+                    self.progress_label.setText("Postęp: 0%")
+
                 if not self.competition_order:
                     self.competition_status_label.setText(
                         "Zawody zakończone! (Brak finalistów)"
                     )
+                    self.competition_status_label.setStyleSheet("""
+                        QLabel {
+                            color: #dc3545;
+                            font-weight: bold;
+                            font-size: 14px;
+                            padding: 10px;
+                            background-color: rgba(220, 53, 69, 0.1);
+                            border-radius: 6px;
+                            border-left: 4px solid #dc3545;
+                        }
+                    """)
                     return
-                QTimer.singleShot(1500, self._process_next_jumper)
+
+                QTimer.singleShot(2000, self._start_second_round)
             else:
+                # Koniec zawodów
                 self.competition_status_label.setText("Zawody zakończone!")
+                self.competition_status_label.setStyleSheet("""
+                    QLabel {
+                        color: #28a745;
+                        font-weight: bold;
+                        font-size: 14px;
+                        padding: 10px;
+                        background-color: rgba(40, 167, 69, 0.1);
+                        border-radius: 6px;
+                        border-left: 4px solid #28a745;
+                    }
+                """)
+
                 self.competition_results.sort(
-                    key=lambda x: (x["d1"] + x["d2"]), reverse=True
+                    key=lambda x: (x["p1"] + x["p2"]), reverse=True
                 )
                 self._update_competition_table()
             return
+
         jumper = self.competition_order[self.current_jumper_index]
+
+        # Lepszy komunikat o aktualnym skoczku
         self.competition_status_label.setText(
-            f"Seria {self.current_round}: skacze {jumper}..."
+            f"🎯 Seria {self.current_round}: {jumper} skacze..."
         )
-        distance = fly_simulation(self.competition_hill, jumper, self.competition_gate)
+        self.competition_status_label.setStyleSheet("""
+            QLabel {
+                color: #0078d4;
+                font-weight: bold;
+                font-size: 14px;
+                padding: 10px;
+                background-color: rgba(0, 120, 212, 0.1);
+                border-radius: 6px;
+                border-left: 4px solid #0078d4;
+            }
+        """)
+
+        raw_distance = fly_simulation(
+            self.competition_hill, jumper, self.competition_gate
+        )
+        # Round distance to 0.5m precision for display and point calculation
+        distance = round_distance_to_half_meter(raw_distance)
         res_item = next(
             item for item in self.competition_results if item["jumper"] == jumper
         )
+
+        # Oblicz punkty za skok using rounded distance
+        points = calculate_jump_points(distance, self.competition_hill.K)
+
         if self.current_round == 1:
             res_item["d1"] = distance
+            res_item["p1"] = points
         else:
             res_item["d2"] = distance
+            res_item["p2"] = points
+
         self._update_competition_table()
         self.current_jumper_index += 1
+
+        # Aktualizuj postęp
+        if hasattr(self, "progress_label"):
+            total_jumpers = len(self.competition_order)
+            progress = (self.current_jumper_index / total_jumpers) * 100
+            self.progress_label.setText(f"Postęp: {progress:.0f}%")
+
         QTimer.singleShot(150, self._process_next_jumper)
+
+    def _start_second_round(self):
+        """Rozpoczyna drugą serię zawodów"""
+        self.competition_status_label.setText(
+            f"Rozpoczynanie 2. serii... ({len(self.competition_order)} finalistów)"
+        )
+        self.competition_status_label.setStyleSheet("""
+            QLabel {
+                color: #28a745;
+                font-weight: bold;
+                font-size: 14px;
+                padding: 10px;
+                background-color: rgba(40, 167, 69, 0.1);
+                border-radius: 6px;
+                border-left: 4px solid #28a745;
+            }
+        """)
+        QTimer.singleShot(1000, self._process_next_jumper)
 
     def _update_competition_table(self):
         # Sort results before displaying
         if self.current_round == 1 and self.current_jumper_index > 0:
-            # In round 1, sort by first distance
-            self.competition_results.sort(key=lambda x: x.get("d1", 0), reverse=True)
+            # In round 1, sort by first round points
+            self.competition_results.sort(key=lambda x: x.get("p1", 0), reverse=True)
         elif self.current_round == 2:
-            # In round 2, sort by total distance
+            # In round 2, sort by total points
             self.competition_results.sort(
-                key=lambda x: (x.get("d1", 0) + x.get("d2", 0)), reverse=True
+                key=lambda x: (x.get("p1", 0) + x.get("p2", 0)), reverse=True
             )
 
         self.results_table.setRowCount(len(self.competition_results))
         for i, res in enumerate(self.competition_results):
             jumper = res["jumper"]
+
+            # Miejsce dla top 3
+            place_item = QTableWidgetItem()
+            if i == 0:
+                place_item.setText("1")
+                place_item.setBackground(QColor("#FFD700"))
+            elif i == 1:
+                place_item.setText("2")
+                place_item.setBackground(QColor("#C0C0C0"))
+            elif i == 2:
+                place_item.setText("3")
+                place_item.setBackground(QColor("#CD7F32"))
+            else:
+                place_item.setText(str(i + 1))
+            place_item.setTextAlignment(Qt.AlignCenter)
+            self.results_table.setItem(i, 0, place_item)
+
+            # Flaga kraju
             flag_label = QLabel()
             flag_pixmap = self._create_rounded_flag_pixmap(jumper.nationality)
             if not flag_pixmap.isNull():
@@ -1896,14 +2996,69 @@ class MainWindow(QMainWindow):
             flag_label.setAlignment(Qt.AlignCenter)
             flag_label.setStyleSheet("padding: 4px;")
             self.results_table.setCellWidget(i, 1, flag_label)
-            self.results_table.setItem(i, 0, QTableWidgetItem(str(i + 1)))
-            self.results_table.setItem(i, 2, QTableWidgetItem(str(jumper)))
-            self.results_table.setItem(
-                i, 3, QTableWidgetItem(f"{res['d1']:.2f}" if res["d1"] > 0 else "-")
-            )
-            self.results_table.setItem(
-                i, 4, QTableWidgetItem(f"{res['d2']:.2f}" if res["d2"] > 0 else "-")
-            )
+
+            # Nazwa zawodnika
+            jumper_item = QTableWidgetItem(str(jumper))
+            jumper_item.setBackground(QColor("#2a2a2a"))
+            self.results_table.setItem(i, 2, jumper_item)
+
+            # I seria - dystans
+            d1_item = QTableWidgetItem()
+            if res["d1"] > 0:
+                d1_item.setText(format_distance_with_unit(res["d1"]))
+                d1_item.setBackground(QColor("#1e3a8a"))
+                d1_item.setForeground(QColor("#ffffff"))
+            else:
+                d1_item.setText("-")
+            d1_item.setTextAlignment(Qt.AlignCenter)
+            self.results_table.setItem(i, 3, d1_item)
+
+            # I seria - punkty
+            p1_item = QTableWidgetItem()
+            if res["p1"] > 0:
+                p1_item.setText(f"{res['p1']:.1f}")
+                p1_item.setBackground(QColor("#059669"))
+                p1_item.setForeground(QColor("#ffffff"))
+            else:
+                p1_item.setText("-")
+            p1_item.setTextAlignment(Qt.AlignCenter)
+            self.results_table.setItem(i, 4, p1_item)
+
+            # II seria - dystans
+            d2_item = QTableWidgetItem()
+            if res["d2"] > 0:
+                d2_item.setText(format_distance_with_unit(res["d2"]))
+                d2_item.setBackground(QColor("#1e3a8a"))
+                d2_item.setForeground(QColor("#ffffff"))
+            else:
+                d2_item.setText("-")
+            d2_item.setTextAlignment(Qt.AlignCenter)
+            self.results_table.setItem(i, 5, d2_item)
+
+            # II seria - punkty
+            p2_item = QTableWidgetItem()
+            if res["p2"] > 0:
+                p2_item.setText(f"{res['p2']:.1f}")
+                p2_item.setBackground(QColor("#059669"))
+                p2_item.setForeground(QColor("#ffffff"))
+            else:
+                p2_item.setText("-")
+            p2_item.setTextAlignment(Qt.AlignCenter)
+            self.results_table.setItem(i, 6, p2_item)
+
+            # Suma punktów
+            total_points = res.get("p1", 0) + res.get("p2", 0)
+            total_item = QTableWidgetItem()
+            if total_points > 0:
+                total_item.setText(f"{total_points:.1f}")
+                total_item.setBackground(QColor("#dc3545"))
+                total_item.setForeground(QColor("#ffffff"))
+                total_item.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+            else:
+                total_item.setText("-")
+            total_item.setTextAlignment(Qt.AlignCenter)
+            self.results_table.setItem(i, 7, total_item)
+
         QApplication.processEvents()
 
     def start_zoom_animation(self, ax, plot_elements):

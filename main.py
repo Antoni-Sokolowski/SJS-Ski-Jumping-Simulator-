@@ -198,7 +198,8 @@ def slider_to_drag_coefficient_flight(slider_value: int) -> float:
     Konwertuje wartość slidera (0-100) na współczynnik oporu aerodynamicznego w locie (0.5-0.4).
     """
     # Mapowanie: 0 -> 0.5, 100 -> 0.4
-    return 0.5 - (slider_value / 100.0) * (0.5 - 0.4)
+    result = 0.5 - (slider_value / 100.0) * (0.5 - 0.4)
+    return result
 
 
 def drag_coefficient_flight_to_slider(drag_coefficient: float) -> int:
@@ -211,7 +212,8 @@ def drag_coefficient_flight_to_slider(drag_coefficient: float) -> int:
     elif drag_coefficient <= 0.4:
         return 100
     else:
-        return int(((0.5 - drag_coefficient) / (0.5 - 0.4)) * 100)
+        result = round(((0.5 - drag_coefficient) / (0.5 - 0.4)) * 100)
+        return result
 
 
 def style_to_frontal_area(style: str) -> float:
@@ -2154,6 +2156,7 @@ class MainWindow(QMainWindow):
         widgets = {}
         if isinstance(data_obj, Jumper):
             widgets = self.jumper_edit_widgets
+
         elif isinstance(data_obj, Hill):
             widgets = self.hill_edit_widgets
 
@@ -2180,11 +2183,21 @@ class MainWindow(QMainWindow):
                 elif attr == "flight_style":
                     # Konwertuj styl na parametry fizyczne
                     style = widget.currentText()
-                    frontal_area = style_to_frontal_area(style)
-                    setattr(data_obj, "flight_frontal_area", frontal_area)
+                    old_style = getattr(data_obj, "flight_style", "Normalny")
 
-                    # Aplikuj dodatkowe efekty stylu na inne parametry
-                    apply_style_physics(data_obj, style)
+                    # Sprawdź czy styl się rzeczywiście zmienił
+                    if style != old_style:
+                        frontal_area = style_to_frontal_area(style)
+                        setattr(data_obj, "flight_frontal_area", frontal_area)
+                        setattr(data_obj, "flight_style", style)
+
+                        # Aplikuj dodatkowe efekty stylu na inne parametry
+                        apply_style_physics(data_obj, style)
+                    else:
+                        # Jeśli styl się nie zmienił, tylko zaktualizuj flight_frontal_area
+                        frontal_area = style_to_frontal_area(style)
+                        setattr(data_obj, "flight_frontal_area", frontal_area)
+                        setattr(data_obj, "flight_style", style)
                 elif attr == "flight_resistance":
                     # Konwertuj wartość slidera na flight_drag_coefficient
                     slider_value = widget.value()
@@ -3909,7 +3922,7 @@ class MainWindow(QMainWindow):
 
                 # Oceniaj skok przez sędziów
                 judge_scores = self.judge_panel.score_jump(
-                    jumper, distance, self.competition_hill.L
+                    jumper, distance, self.competition_hill.L, self.competition_hill
                 )
 
                 # Oblicz całkowite punkty (odległość + noty sędziowskie)
@@ -4061,7 +4074,7 @@ class MainWindow(QMainWindow):
 
         # Oceniaj skok przez sędziów
         judge_scores = self.judge_panel.score_jump(
-            jumper, distance, self.competition_hill.L
+            jumper, distance, self.competition_hill.L, self.competition_hill
         )
 
         # Oblicz całkowite punkty (odległość + noty sędziowskie)
@@ -4608,6 +4621,7 @@ class Judge:
         distance: float,
         hill_size: float,
         telemark_landing: bool = False,
+        hill=None,
     ) -> float:
         """
         Ocenia skok w skali 14-20 punktów.
@@ -4621,24 +4635,58 @@ class Judge:
         Returns:
             Nota sędziego (14.0-20.0)
         """
-        # Sprawdź czy skok jest za HS
-        is_over_hs = distance > hill_size
+        # Potrzebujemy dostępu do punktu K skoczni
+        if hill is not None:
+            k_point = hill.K
+        else:
+            # Fallback - przybliżenie punktu K jako 90% HS
+            k_point = hill_size * 0.9
+
+        # Określ położenie względem punktów K i HS
+        is_before_k = distance < k_point
+        is_at_or_after_k = distance >= k_point
+        is_before_hs = distance < hill_size
+        is_at_or_after_hs = distance >= hill_size
 
         if telemark_landing:
             # Z telemarkiem - interpolacja na podstawie statystyki Telemark
             telemark_factor = jumper.telemark / 100.0
-            # Telemark 0 → 18, Telemark 100 → 19
-            base_mean = 18.0 + (telemark_factor * 1.0)
-            # Odchylenie ±1
-            score = random.uniform(base_mean - 1.0, base_mean + 1.0)
-        else:
-            # Bez telemarku
-            if is_over_hs:
-                # Za HS bez telemarku - zawsze 15-17 niezależnie od statystyki
-                score = random.uniform(15.0, 17.0)
+
+            # Bazowa ocena zależna od statystyki Telemark
+            # Telemark 0 → 16, Telemark 100 → 17
+            base_score = 16.0 + (telemark_factor * 1.0)
+
+            # Bonus za odległość
+            if is_before_k:
+                # Przed K - bez bonusu
+                final_base = base_score
+            elif is_at_or_after_k and is_before_hs:
+                # Na lub za K, ale przed HS - bonus +1
+                final_base = base_score + 1.0
+            elif is_at_or_after_hs:
+                # Na lub za HS - bonus +2
+                final_base = base_score + 2.0
             else:
-                # Standardowo bez telemarku - 14.5 ± 1.5
-                score = random.uniform(13.0, 16.0)
+                final_base = base_score
+
+            # Odchylenie ±1
+            score = random.uniform(final_base - 1.0, final_base + 1.0)
+        else:
+            # Bez telemarku - nie zależy od statystyki Telemark
+            if is_before_k:
+                # Przed K - bazowa ocena 14
+                base_score = 14.0
+            elif is_at_or_after_k and is_before_hs:
+                # Na lub za K, ale przed HS - bonus +1
+                base_score = 15.0
+            elif is_at_or_after_hs:
+                # Na lub za HS - bonus +2
+                base_score = 16.0
+            else:
+                base_score = 14.0
+
+            # Odchylenie ±1
+            score = random.uniform(base_score - 1.0, base_score + 1.0)
 
         # Ogranicz do zakresu 14-20
         score = max(14.0, min(20.0, score))
@@ -4653,7 +4701,9 @@ class JudgePanel:
     def __init__(self):
         self.judges = [Judge(i) for i in range(1, 6)]
 
-    def score_jump(self, jumper: Jumper, distance: float, hill_size: float) -> dict:
+    def score_jump(
+        self, jumper: Jumper, distance: float, hill_size: float, hill=None
+    ) -> dict:
         """
         Ocenia skok przez wszystkich sędziów.
 
@@ -4667,7 +4717,9 @@ class JudgePanel:
         # Noty wszystkich sędziów
         judge_scores = []
         for judge in self.judges:
-            score = judge.score_jump(jumper, distance, hill_size, telemark_landing)
+            score = judge.score_jump(
+                jumper, distance, hill_size, telemark_landing, hill
+            )
             judge_scores.append(score)
 
         # Usuń najwyższą i najniższą notę
@@ -4700,15 +4752,15 @@ class JudgePanel:
             Szansa na telemark (0.0-1.0)
         """
         # Interpolacja szansy na podstawie telemarku
-        # Telemark 0 → 50% szansy, Telemark 100 → 100% szansy
+        # Telemark 0 → 50% szansy, Telemark 50 → 75% szansy, Telemark 100 → 100% szansy
         telemark_factor = jumper.telemark / 100.0
         base_chance = 0.50 + (telemark_factor * 0.50)  # 50% → 100%
 
-        # Jeśli lądowanie za HS, szansa spada z każdym metrem o 5%
+        # Jeśli lądowanie za HS, szansa spada z każdym 0.5 metra o 2.5%
         if distance > hill_size:
             meters_over_hs = distance - hill_size
-            # Każdy metr za HS zmniejsza szansę o 5%
-            distance_penalty = meters_over_hs * 0.05
+            # Każde 0.5 metra za HS zmniejsza szansę o 2.5%
+            distance_penalty = (meters_over_hs / 0.5) * 0.025
             base_chance = max(0.0, base_chance - distance_penalty)
 
         return base_chance

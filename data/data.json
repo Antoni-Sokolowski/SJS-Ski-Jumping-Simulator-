@@ -2554,13 +2554,13 @@
             "takeoff_frontal_area": 0.8,
             "takeoff_lift_coefficient": 0,
             "jump_force": 2000.0,
-            "flight_drag_coefficient": 0.42700000000000005,
+            "flight_drag_coefficient": 0.42900000000000005,
             "flight_frontal_area": 0.52,
             "flight_lift_coefficient": 0.985,
             "landing_drag_coefficient": 3,
             "landing_frontal_area": 1,
             "landing_lift_coefficient": 0,
-            "telemark": 89.0
+            "telemark": 83.0
         },
         {
             "name": "Johann Andre",

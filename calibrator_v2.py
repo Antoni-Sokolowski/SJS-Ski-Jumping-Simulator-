@@ -2,6 +2,7 @@
 """
 Kalibrator V2 - Poprawiony kalibrator dla symulatora skoków narciarskich
 Zapewnia synchronizację z GUI main.py i optymalizuje parametry skoczków
+ADAPTED FOR NEW SIMPLIFIED PARAMETERS
 """
 
 import json
@@ -11,6 +12,126 @@ from src.simulation import load_data_from_json, fly_simulation
 
 # Inicjalizacja colorama
 init(autoreset=True)
+
+
+# Dodaj funkcje mapowania z main.py
+def slider_to_drag_coefficient(slider_value: int) -> float:
+    """
+    Konwertuje wartość slidera (0-100) na współczynnik oporu aerodynamicznego (0.5-0.38).
+    """
+    return 0.5 - (slider_value / 100.0) * (0.5 - 0.38)
+
+
+def drag_coefficient_to_slider(drag_coefficient: float) -> int:
+    """
+    Konwertuje współczynnik oporu aerodynamicznego (0.5-0.38) na wartość slidera (0-100).
+    """
+    if drag_coefficient >= 0.5:
+        return 0
+    elif drag_coefficient <= 0.38:
+        return 100
+    else:
+        return int(((0.5 - drag_coefficient) / (0.5 - 0.38)) * 100)
+
+
+def slider_to_jump_force(slider_value: int) -> float:
+    """
+    Konwertuje wartość slidera (0-100) na siłę wybicia (1000N-2000N).
+    """
+    return 1000.0 + (slider_value / 100.0) * (2000.0 - 1000.0)
+
+
+def jump_force_to_slider(jump_force: float) -> int:
+    """
+    Konwertuje siłę wybicia (1000N-2000N) na wartość slidera (0-100).
+    """
+    if jump_force <= 1000.0:
+        return 0
+    elif jump_force >= 2000.0:
+        return 100
+    else:
+        return int(((jump_force - 1000.0) / (2000.0 - 1000.0)) * 100)
+
+
+def slider_to_lift_coefficient(slider_value: int) -> float:
+    """
+    Konwertuje wartość slidera (0-100) na współczynnik siły nośnej (0.5-1.0).
+    """
+    return 0.5 + (slider_value / 100.0) * (1.0 - 0.5)
+
+
+def lift_coefficient_to_slider(lift_coefficient: float) -> int:
+    """
+    Konwertuje współczynnik siły nośnej (0.5-1.0) na wartość slidera (0-100).
+    """
+    if lift_coefficient <= 0.5:
+        return 0
+    elif lift_coefficient >= 1.0:
+        return 100
+    else:
+        return int(((lift_coefficient - 0.5) / (1.0 - 0.5)) * 100)
+
+
+def slider_to_drag_coefficient_flight(slider_value: int) -> float:
+    """
+    Konwertuje wartość slidera (0-100) na współczynnik oporu aerodynamicznego w locie (0.5-0.4).
+    """
+    return 0.5 - (slider_value / 100.0) * (0.5 - 0.4)
+
+
+def drag_coefficient_flight_to_slider(drag_coefficient: float) -> int:
+    """
+    Konwertuje współczynnik oporu aerodynamicznego w locie (0.5-0.4) na wartość slidera (0-100).
+    """
+    if drag_coefficient >= 0.5:
+        return 0
+    elif drag_coefficient <= 0.4:
+        return 100
+    else:
+        return int(((0.5 - drag_coefficient) / (0.5 - 0.4)) * 100)
+
+
+def style_to_frontal_area(style: str) -> float:
+    """
+    Konwertuje styl lotu na powierzchnię czołową.
+    """
+    style_mapping = {"Normalny": 0.52, "Agresywny": 0.5175, "Pasywny": 0.5225}
+    return style_mapping.get(style, 0.52)  # Default to Normalny
+
+
+def frontal_area_to_style(frontal_area: float) -> str:
+    """
+    Konwertuje powierzchnię czołową na styl lotu.
+    """
+    if abs(frontal_area - 0.5175) < 0.002:
+        return "Agresywny"
+    elif abs(frontal_area - 0.5225) < 0.002:
+        return "Pasywny"
+    else:
+        return "Normalny"
+
+
+def apply_style_physics(jumper, style: str):
+    """
+    Aplikuje styl lotu z zrównoważonymi efektami fizycznymi.
+    Każdy styl ma małe zmiany (±0.5%) w różnych parametrach.
+    """
+    if style == "Agresywny":
+        # Mniejsza powierzchnia = lepsze wykorzystanie siły nośnej i mniejszy opór
+        jumper.flight_frontal_area = 0.5175
+        jumper.flight_lift_coefficient *= 1.005  # +0.5% siły nośnej
+        jumper.flight_drag_coefficient *= 0.995  # -0.5% oporu
+
+    elif style == "Pasywny":
+        # Większa powierzchnia = gorsze wykorzystanie siły nośnej i większy opór
+        jumper.flight_frontal_area = 0.5225
+        jumper.flight_lift_coefficient *= 0.995  # -0.5% siły nośnej
+        jumper.flight_drag_coefficient *= 1.005  # +0.5% oporu
+
+    else:  # Normalny
+        # Neutralny styl - bez zmian w innych parametrach
+        jumper.flight_frontal_area = 0.52
+        # Bez zmian w flight_lift_coefficient i flight_drag_coefficient
 
 
 class CalibratorV2:
@@ -31,14 +152,28 @@ class CalibratorV2:
         # Pozostali skoczkowie
         self.other_jumpers = [j for j in self.jumpers if j != self.daniel]
 
-        # Zapisz oryginalne parametry
+        # Zapisz oryginalne parametry (nowe parametry UI + fizyczne)
         self.original_params = {}
         for jumper in self.jumpers:
             self.original_params[f"{jumper.name} {jumper.last_name}"] = {
+                # Parametry fizyczne
                 "jump_force": jumper.jump_force,
                 "flight_lift_coefficient": jumper.flight_lift_coefficient,
                 "flight_drag_coefficient": jumper.flight_drag_coefficient,
                 "flight_frontal_area": jumper.flight_frontal_area,
+                "inrun_drag_coefficient": jumper.inrun_drag_coefficient,
+                # Parametry UI (obliczone)
+                "inrun_position": drag_coefficient_to_slider(
+                    jumper.inrun_drag_coefficient
+                ),
+                "takeoff_force": jump_force_to_slider(jumper.jump_force),
+                "flight_technique": lift_coefficient_to_slider(
+                    jumper.flight_lift_coefficient
+                ),
+                "flight_style": frontal_area_to_style(jumper.flight_frontal_area),
+                "flight_resistance": drag_coefficient_flight_to_slider(
+                    jumper.flight_drag_coefficient
+                ),
             }
 
         print(f"{Fore.GREEN}Kalibrator V2 zainicjalizowany{Style.RESET_ALL}")
@@ -92,39 +227,52 @@ class CalibratorV2:
         return results
 
     def optimize_daniel_parameters(self, results):
-        """Optymalizuje parametry Daniela z bardziej realistycznymi limitami"""
-        print(f"\n{Fore.YELLOW}Optymalizacja parametrów Daniela...{Style.RESET_ALL}")
+        """Optymalizuje parametry Daniela z nowymi parametrami UI"""
+        print(
+            f"\n{Fore.YELLOW}Optymalizacja parametrów Daniela (nowe parametry UI)...{Style.RESET_ALL}"
+        )
 
         # Oblicz średni błąd
         avg_error = sum(r["error"] for r in results) / len(results)
         print(f"Średni błąd przed optymalizacją: {avg_error:.2f}m")
 
-        # Bardziej realistyczne parametry do optymalizacji
-        params_to_optimize = [
-            ("jump_force", 1500, 2000, 0.015),  # Mniejszy krok, max 2000
-            ("flight_lift_coefficient", 0.8, 1.0, 0.008),  # Mniejszy krok, max 1.0
-            ("flight_drag_coefficient", 0.3, 0.8, 0.015),  # Min 0.3, mniejszy krok
-            ("flight_frontal_area", 0.3, 0.6, 0.008),  # Mniejszy krok
+        # Nowe parametry do optymalizacji (UI-friendly)
+        slider_params = [
+            ("inrun_position", 0, 100, 5),  # Slider 0-100, krok 5
+            ("takeoff_force", 0, 100, 5),  # Slider 0-100, krok 5
+            ("flight_technique", 0, 100, 5),  # Slider 0-100, krok 5
+            ("flight_resistance", 0, 100, 5),  # Slider 0-100, krok 5
+        ]
+        dropdown_params = [
+            ("flight_style", ["Normalny", "Agresywny", "Pasywny"]),  # Dropdown
         ]
 
         best_error = avg_error
         best_params = {
-            "jump_force": self.daniel.jump_force,
-            "flight_lift_coefficient": self.daniel.flight_lift_coefficient,
-            "flight_drag_coefficient": self.daniel.flight_drag_coefficient,
-            "flight_frontal_area": self.daniel.flight_frontal_area,
+            "inrun_position": drag_coefficient_to_slider(
+                self.daniel.inrun_drag_coefficient
+            ),
+            "takeoff_force": jump_force_to_slider(self.daniel.jump_force),
+            "flight_technique": lift_coefficient_to_slider(
+                self.daniel.flight_lift_coefficient
+            ),
+            "flight_resistance": drag_coefficient_flight_to_slider(
+                self.daniel.flight_drag_coefficient
+            ),
+            "flight_style": frontal_area_to_style(self.daniel.flight_frontal_area),
         }
 
-        # Iteracyjna optymalizacja z mniejszą liczbą iteracji
-        for iteration in range(30):
+        # Iteracyjna optymalizacja
+        for iteration in range(20):  # Zmniejszona liczba iteracji
             improved = False
 
-            for param_name, min_val, max_val, step in params_to_optimize:
-                current_val = getattr(self.daniel, param_name)
+            # Optymalizuj parametry slider
+            for param_name, min_val, max_val, step in slider_params:
+                current_val = best_params[param_name]
 
                 # Testuj zwiększenie
-                new_val = min(max_val, current_val * (1 + step))
-                setattr(self.daniel, param_name, new_val)
+                new_val = min(max_val, current_val + step)
+                self._apply_ui_param_to_jumper(param_name, new_val)
 
                 test_results = self.test_daniel_on_all_hills()
                 test_error = sum(r["error"] for r in test_results) / len(test_results)
@@ -134,12 +282,12 @@ class CalibratorV2:
                     best_params[param_name] = new_val
                     improved = True
                     print(
-                        f"{Fore.GREEN}↑ {param_name}: {current_val:.3f} → {new_val:.3f} (błąd: {test_error:.2f}m){Style.RESET_ALL}"
+                        f"{Fore.GREEN}↑ {param_name}: {current_val} → {new_val} (błąd: {test_error:.2f}m){Style.RESET_ALL}"
                     )
                 else:
                     # Testuj zmniejszenie
-                    new_val = max(min_val, current_val * (1 - step))
-                    setattr(self.daniel, param_name, new_val)
+                    new_val = max(min_val, current_val - step)
+                    self._apply_ui_param_to_jumper(param_name, new_val)
 
                     test_results = self.test_daniel_on_all_hills()
                     test_error = sum(r["error"] for r in test_results) / len(
@@ -151,11 +299,49 @@ class CalibratorV2:
                         best_params[param_name] = new_val
                         improved = True
                         print(
-                            f"{Fore.GREEN}↓ {param_name}: {current_val:.3f} → {new_val:.3f} (błąd: {test_error:.2f}m){Style.RESET_ALL}"
+                            f"{Fore.GREEN}↓ {param_name}: {current_val} → {new_val} (błąd: {test_error:.2f}m){Style.RESET_ALL}"
                         )
                     else:
                         # Przywróć oryginalną wartość
-                        setattr(self.daniel, param_name, current_val)
+                        self._apply_ui_param_to_jumper(param_name, current_val)
+
+            # Optymalizuj parametry dropdown
+            for param_name, options in dropdown_params:
+                current_style = frontal_area_to_style(self.daniel.flight_frontal_area)
+                current_index = ["Normalny", "Agresywny", "Pasywny"].index(
+                    current_style
+                )
+
+                # Testuj inne style
+                for test_index in range(3):
+                    if test_index != current_index:
+                        test_style = ["Normalny", "Agresywny", "Pasywny"][test_index]
+
+                        # Zapisz oryginalne wartości
+                        original_frontal_area = self.daniel.flight_frontal_area
+                        original_lift = self.daniel.flight_lift_coefficient
+                        original_drag = self.daniel.flight_drag_coefficient
+
+                        # Aplikuj styl z balansowanymi efektami
+                        apply_style_physics(self.daniel, test_style)
+
+                        test_results = self.test_daniel_on_all_hills()
+                        test_error = sum(r["error"] for r in test_results) / len(
+                            test_results
+                        )
+
+                        if test_error < best_error:
+                            best_error = test_error
+                            best_params[param_name] = test_style
+                            improved = True
+                            print(
+                                f"{Fore.GREEN}↔ {param_name}: {current_style} → {test_style} (błąd: {test_error:.2f}m){Style.RESET_ALL}"
+                            )
+                        else:
+                            # Przywróć oryginalne wartości
+                            self.daniel.flight_frontal_area = original_frontal_area
+                            self.daniel.flight_lift_coefficient = original_lift
+                            self.daniel.flight_drag_coefficient = original_drag
 
             if not improved:
                 print(
@@ -165,12 +351,28 @@ class CalibratorV2:
 
         # Zastosuj najlepsze parametry
         for param_name, value in best_params.items():
-            setattr(self.daniel, param_name, value)
+            self._apply_ui_param_to_jumper(param_name, value)
 
         print(
             f"\n{Fore.GREEN}Najlepszy średni błąd: {best_error:.2f}m{Style.RESET_ALL}"
         )
         return best_error
+
+    def _apply_ui_param_to_jumper(self, param_name, value):
+        """Aplikuje parametr UI do skoczka (konwertuje na fizyczny parametr)"""
+        if param_name == "inrun_position":
+            self.daniel.inrun_drag_coefficient = slider_to_drag_coefficient(value)
+        elif param_name == "takeoff_force":
+            self.daniel.jump_force = slider_to_jump_force(value)
+        elif param_name == "flight_technique":
+            self.daniel.flight_lift_coefficient = slider_to_lift_coefficient(value)
+        elif param_name == "flight_resistance":
+            self.daniel.flight_drag_coefficient = slider_to_drag_coefficient_flight(
+                value
+            )
+        elif param_name == "flight_style":
+            # Aplikuj styl z balansowanymi efektami
+            apply_style_physics(self.daniel, value)
 
     def optimize_hill_friction(self):
         """Optymalizuje tarcie skoczni aby błąd był jak najbliżej 0"""
@@ -257,13 +459,14 @@ class CalibratorV2:
             f"\n{Fore.CYAN}Dostosowywanie parametrów pozostałych skoczków...{Style.RESET_ALL}"
         )
 
-        # Oblicz współczynniki zmian dla Daniela
+        # Oblicz współczynniki zmian dla Daniela (parametry fizyczne)
         daniel_ratios = {}
         for param in [
             "jump_force",
             "flight_lift_coefficient",
             "flight_drag_coefficient",
             "flight_frontal_area",
+            "inrun_drag_coefficient",
         ]:
             original = self.original_params[
                 f"{self.daniel.name} {self.daniel.last_name}"
@@ -285,6 +488,7 @@ class CalibratorV2:
                 "flight_lift_coefficient",
                 "flight_drag_coefficient",
                 "flight_frontal_area",
+                "inrun_drag_coefficient",
             ]:
                 original = self.original_params[jumper_name][param]
                 ratio = daniel_ratios[param]
@@ -294,13 +498,15 @@ class CalibratorV2:
 
                 # Zastosuj realistyczne limity
                 if param == "jump_force":
-                    new_value = max(1500, min(2000, new_value))
+                    new_value = max(1000, min(2000, new_value))
                 elif param == "flight_lift_coefficient":
-                    new_value = max(0.8, min(1.0, new_value))
+                    new_value = max(0.5, min(1.0, new_value))
                 elif param == "flight_drag_coefficient":
-                    new_value = max(0.3, min(0.8, new_value))  # Min 0.3
+                    new_value = max(0.4, min(0.5, new_value))
                 elif param == "flight_frontal_area":
-                    new_value = max(0.3, min(0.6, new_value))
+                    new_value = max(0.5175, min(0.5225, new_value))
+                elif param == "inrun_drag_coefficient":
+                    new_value = max(0.38, min(0.5, new_value))
 
                 setattr(jumper, param, new_value)
 
@@ -324,6 +530,7 @@ class CalibratorV2:
                 # Znajdź odpowiadający obiekt Jumper
                 for jumper in self.jumpers:
                     if f"{jumper.name} {jumper.last_name}" == jumper_name:
+                        # Zaktualizuj parametry fizyczne
                         jumper_data["jump_force"] = jumper.jump_force
                         jumper_data["flight_lift_coefficient"] = (
                             jumper.flight_lift_coefficient
@@ -332,6 +539,13 @@ class CalibratorV2:
                             jumper.flight_drag_coefficient
                         )
                         jumper_data["flight_frontal_area"] = jumper.flight_frontal_area
+                        jumper_data["inrun_drag_coefficient"] = (
+                            jumper.inrun_drag_coefficient
+                        )
+
+                        # Ustaw stałe wartości
+                        jumper_data["mass"] = 60
+                        jumper_data["height"] = 1.7
                         break
 
             # Zaktualizuj tarcie skoczni
@@ -396,19 +610,34 @@ class CalibratorV2:
         avg_error = total_error / len(final_results)
         print(f"\n{Fore.CYAN}Średni błąd: {avg_error:.2f}m{Style.RESET_ALL}")
 
-        # Pokaż parametry Daniela
+        # Pokaż parametry Daniela (UI + fizyczne)
         print(f"\n{Fore.YELLOW}Parametry Daniela TSCHOFENIG:{Style.RESET_ALL}")
-        print(f"jump_force: {self.daniel.jump_force}")
-        print(f"flight_lift_coefficient: {self.daniel.flight_lift_coefficient}")
-        print(f"flight_drag_coefficient: {self.daniel.flight_drag_coefficient}")
-        print(f"flight_frontal_area: {self.daniel.flight_frontal_area}")
+        print(f"Fizyczne parametry:")
+        print(f"  jump_force: {self.daniel.jump_force:.1f}N")
+        print(f"  flight_lift_coefficient: {self.daniel.flight_lift_coefficient:.3f}")
+        print(f"  flight_drag_coefficient: {self.daniel.flight_drag_coefficient:.3f}")
+        print(f"  flight_frontal_area: {self.daniel.flight_frontal_area:.3f}")
+        print(f"  inrun_drag_coefficient: {self.daniel.inrun_drag_coefficient:.3f}")
+
+        print(f"\nParametry UI:")
+        print(
+            f"  Pozycja najazdowa: {drag_coefficient_to_slider(self.daniel.inrun_drag_coefficient)}"
+        )
+        print(f"  Siła wybicia: {jump_force_to_slider(self.daniel.jump_force)}")
+        print(
+            f"  Technika lotu: {lift_coefficient_to_slider(self.daniel.flight_lift_coefficient)}"
+        )
+        print(f"  Styl lotu: {frontal_area_to_style(self.daniel.flight_frontal_area)}")
+        print(
+            f"  Opór powietrza: {drag_coefficient_flight_to_slider(self.daniel.flight_drag_coefficient)}"
+        )
 
         return avg_error
 
     def run_calibration(self):
         """Uruchamia pełną kalibrację z optymalizacją tarcia"""
         print(
-            f"{Fore.CYAN}=== KALIBRATOR V2 - ROZPOCZYNA KALIBRACJĘ ==={Style.RESET_ALL}"
+            f"{Fore.CYAN}=== KALIBRATOR V2 - ROZPOCZYNA KALIBRACJĘ (NOWE PARAMETRY) ==={Style.RESET_ALL}"
         )
 
         # Test początkowy

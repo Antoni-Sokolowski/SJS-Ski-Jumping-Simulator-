@@ -4,6 +4,7 @@ import sys
 import os
 import json
 import copy
+import random
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -54,6 +55,8 @@ from PIL import Image, ImageDraw
 from src.simulation import load_data_from_json, inrun_simulation, fly_simulation
 from src.hill import Hill
 from src.jumper import Jumper
+from utils.constants import GRAVITY, AIR_DENSITY
+from utils.helpers import gravity_force_parallel, friction_force, drag_force
 
 
 def calculate_jump_points(distance: float, k_point: float) -> float:
@@ -125,6 +128,135 @@ def get_qualification_limit(k_point: float) -> int:
         return 40
     else:
         return 50
+
+
+def slider_to_drag_coefficient(slider_value: int) -> float:
+    """
+    Konwertuje wartość slidera (0-100) na współczynnik oporu aerodynamicznego (0.5-0.38).
+    """
+    # Mapowanie: 0 -> 0.5, 100 -> 0.38
+    return 0.5 - (slider_value / 100.0) * (0.5 - 0.38)
+
+
+def drag_coefficient_to_slider(drag_coefficient: float) -> int:
+    """
+    Konwertuje współczynnik oporu aerodynamicznego (0.5-0.38) na wartość slidera (0-100).
+    """
+    # Mapowanie: 0.5 -> 0, 0.38 -> 100
+    if drag_coefficient >= 0.5:
+        return 0
+    elif drag_coefficient <= 0.38:
+        return 100
+    else:
+        return int(((0.5 - drag_coefficient) / (0.5 - 0.38)) * 100)
+
+
+def slider_to_jump_force(slider_value: int) -> float:
+    """
+    Konwertuje wartość slidera (0-100) na siłę wybicia (1000N-2000N).
+    """
+    # Mapowanie: 0 -> 1000N, 100 -> 2000N
+    return 1000.0 + (slider_value / 100.0) * (2000.0 - 1000.0)
+
+
+def jump_force_to_slider(jump_force: float) -> int:
+    """
+    Konwertuje siłę wybicia (1000N-2000N) na wartość slidera (0-100).
+    """
+    # Mapowanie: 1000N -> 0, 2000N -> 100
+    if jump_force <= 1000.0:
+        return 0
+    elif jump_force >= 2000.0:
+        return 100
+    else:
+        return int(((jump_force - 1000.0) / (2000.0 - 1000.0)) * 100)
+
+
+def slider_to_lift_coefficient(slider_value: int) -> float:
+    """
+    Konwertuje wartość slidera (0-100) na współczynnik siły nośnej (0.5-1.0).
+    """
+    # Mapowanie: 0 -> 0.5, 100 -> 1.0
+    return 0.5 + (slider_value / 100.0) * (1.0 - 0.5)
+
+
+def lift_coefficient_to_slider(lift_coefficient: float) -> int:
+    """
+    Konwertuje współczynnik siły nośnej (0.5-1.0) na wartość slidera (0-100).
+    """
+    # Mapowanie: 0.5 -> 0, 1.0 -> 100
+    if lift_coefficient <= 0.5:
+        return 0
+    elif lift_coefficient >= 1.0:
+        return 100
+    else:
+        return int(((lift_coefficient - 0.5) / (1.0 - 0.5)) * 100)
+
+
+def slider_to_drag_coefficient_flight(slider_value: int) -> float:
+    """
+    Konwertuje wartość slidera (0-100) na współczynnik oporu aerodynamicznego w locie (0.5-0.4).
+    """
+    # Mapowanie: 0 -> 0.5, 100 -> 0.4
+    result = 0.5 - (slider_value / 100.0) * (0.5 - 0.4)
+    return result
+
+
+def drag_coefficient_flight_to_slider(drag_coefficient: float) -> int:
+    """
+    Konwertuje współczynnik oporu aerodynamicznego w locie (0.5-0.4) na wartość slidera (0-100).
+    """
+    # Mapowanie: 0.5 -> 0, 0.4 -> 100
+    if drag_coefficient >= 0.5:
+        return 0
+    elif drag_coefficient <= 0.4:
+        return 100
+    else:
+        result = round(((0.5 - drag_coefficient) / (0.5 - 0.4)) * 100)
+        return result
+
+
+def style_to_frontal_area(style: str) -> float:
+    """
+    Konwertuje styl lotu na powierzchnię czołową.
+    """
+    style_mapping = {"Normalny": 0.52, "Agresywny": 0.5175, "Pasywny": 0.5225}
+    return style_mapping.get(style, 0.52)  # Default to Normalny
+
+
+def frontal_area_to_style(frontal_area: float) -> str:
+    """
+    Konwertuje powierzchnię czołową na styl lotu.
+    """
+    if abs(frontal_area - 0.5175) < 0.002:
+        return "Agresywny"
+    elif abs(frontal_area - 0.5225) < 0.002:
+        return "Pasywny"
+    else:
+        return "Normalny"
+
+
+def apply_style_physics(jumper, style: str):
+    """
+    Aplikuje styl lotu z zrównoważonymi efektami fizycznymi.
+    Każdy styl ma małe zmiany (±0.5%) w różnych parametrach.
+    """
+    if style == "Agresywny":
+        # Mniejsza powierzchnia = lepsze wykorzystanie siły nośnej i mniejszy opór
+        jumper.flight_frontal_area = 0.5175
+        jumper.flight_lift_coefficient *= 1.005  # +0.5% siły nośnej
+        jumper.flight_drag_coefficient *= 0.995  # -0.5% oporu
+
+    elif style == "Pasywny":
+        # Większa powierzchnia = gorsze wykorzystanie siły nośnej i większy opór
+        jumper.flight_frontal_area = 0.5225
+        jumper.flight_lift_coefficient *= 0.995  # -0.5% siły nośnej
+        jumper.flight_drag_coefficient *= 1.005  # +0.5% oporu
+
+    else:  # Normalny
+        # Neutralny styl - bez zmian w innych parametrach
+        jumper.flight_frontal_area = 0.52
+        # Bez zmian w flight_lift_coefficient i flight_drag_coefficient
 
 
 class RecommendedGateWorker(QThread):
@@ -322,6 +454,96 @@ class CustomDoubleSpinBox(QDoubleSpinBox):
         event.ignore()
 
 
+class CustomSlider(QWidget):
+    """
+    Niestandardowy widget slider z edytowalnym wyświetlaniem wartości.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.layout = QHBoxLayout(self)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+
+        # Slider
+        self.slider = QSlider(Qt.Horizontal)
+        self.slider.setRange(0, 100)
+        self.slider.setStyleSheet("""
+            QSlider::groove:horizontal {
+                border: 1px solid #555;
+                height: 8px;
+                background: #2b2b2b;
+                border-radius: 4px;
+            }
+            QSlider::handle:horizontal {
+                background: #0078d4;
+                border: 2px solid #0078d4;
+                width: 18px;
+                height: 18px;
+                border-radius: 9px;
+                margin: -5px 0;
+            }
+            QSlider::handle:horizontal:hover {
+                background: #106ebe;
+                border-color: #106ebe;
+            }
+            QSlider::sub-page:horizontal {
+                background: #0078d4;
+                border-radius: 4px;
+            }
+        """)
+
+        # Custom value spinbox with custom arrow buttons
+        self.value_spinbox = CustomDoubleSpinBox()
+        self.value_spinbox.setRange(0.0, 100.0)
+        self.value_spinbox.setDecimals(2)
+        self.value_spinbox.setStyleSheet("""
+            QDoubleSpinBox {
+                color: #ffffff;
+                font-size: 14px;
+                font-weight: bold;
+                min-width: 60px;
+                background: #2b2b2b;
+                border: 1px solid #555;
+                border-radius: 4px;
+                padding: 2px;
+            }
+        """)
+
+        self.layout.addWidget(self.slider, 1)
+        self.layout.addWidget(self.value_spinbox)
+
+        # Connect signals
+        self.slider.valueChanged.connect(self._update_spinbox)
+        self.value_spinbox.valueChanged.connect(self._update_slider)
+
+    def set_button_icons(self, up_icon, down_icon):
+        """Ustawia ikony przycisków dla spinboxa."""
+        self.value_spinbox.set_button_icons(up_icon, down_icon)
+
+    def _update_spinbox(self, value):
+        # Prevent recursive calls
+        self.value_spinbox.blockSignals(True)
+        self.value_spinbox.setValue(float(value))
+        self.value_spinbox.blockSignals(False)
+
+    def _update_slider(self, value):
+        # Prevent recursive calls
+        self.slider.blockSignals(True)
+        self.slider.setValue(int(value))
+        self.slider.blockSignals(False)
+
+    def value(self):
+        return self.value_spinbox.value()
+
+    def setValue(self, value):
+        self.slider.setValue(int(value))
+        self.value_spinbox.setValue(float(value))
+
+    def setRange(self, min_val, max_val):
+        self.slider.setRange(min_val, max_val)
+        self.value_spinbox.setRange(float(min_val), float(max_val))
+
+
 class CustomProxyStyle(QProxyStyle):
     """
     Niestandardowy styl, który nadpisuje domyślny czas wyświetlania podpowiedzi.
@@ -330,7 +552,14 @@ class CustomProxyStyle(QProxyStyle):
     def styleHint(self, hint, option=None, widget=None, returnData=None):
         if hint == QStyle.StyleHint.SH_ToolTip_WakeUpDelay:
             return 100
-        return super().styleHint(hint, option, widget, returnData)
+        try:
+            return super().styleHint(hint, option, widget, returnData)
+        except TypeError:
+            # Fallback dla przypadków gdy argumenty są nieprawidłowych typów
+            try:
+                return super().styleHint(hint)
+            except:
+                return 0
 
 
 def resource_path(relative_path):
@@ -644,8 +873,14 @@ class MainWindow(QMainWindow):
         self.current_jumper_index = 0
         self.current_round = 1
         self.selected_jumper, self.selected_hill, self.ani = None, None, None
+        self.points_ani = None
+        self.replay_ani = None
+        self.zoom_ani = None
         self.jumper_edit_widgets = {}
         self.hill_edit_widgets = {}
+
+        # Panel sędziowski
+        self.judge_panel = JudgePanel()
 
         self._create_main_menu()
         self._create_sim_type_menu()
@@ -1090,11 +1325,9 @@ class MainWindow(QMainWindow):
                 background-color: #0078d4;
                 border-color: #0078d4;
             }
-            QCheckBox::indicator:checked::after {
-                content: "✓";
-                color: white;
-                font-weight: bold;
-                font-size: 12px;
+            QCheckBox::indicator:checked {
+                background-color: #0078d4;
+                border-color: #0078d4;
             }
         """)
         self.qualification_checkbox.setChecked(True)  # Domyślnie włączone
@@ -1310,13 +1543,16 @@ class MainWindow(QMainWindow):
         left_panel.addWidget(self.editor_tab_widget)
 
         editor_button_layout = QHBoxLayout()
-        self.add_button = QPushButton("+ Dodaj / Klonuj")
+        self.clone_button = QPushButton("Klonuj")
+        self.add_new_button = QPushButton("+ Dodaj")
         self.delete_button = QPushButton("- Usuń zaznaczone")
-        editor_button_layout.addWidget(self.add_button)
+        editor_button_layout.addWidget(self.clone_button)
+        editor_button_layout.addWidget(self.add_new_button)
         editor_button_layout.addWidget(self.delete_button)
         left_panel.addLayout(editor_button_layout)
 
-        self.add_button.clicked.connect(self._add_new_item)
+        self.clone_button.clicked.connect(self._clone_selected_item)
+        self.add_new_button.clicked.connect(self._add_new_item)
         self.delete_button.clicked.connect(self._delete_selected_item)
 
         main_hbox.addLayout(left_panel, 1)
@@ -1369,27 +1605,20 @@ class MainWindow(QMainWindow):
 
     def _create_editor_form_content(self, parent_widget, data_class):
         jumper_groups = {
-            "Dane Podstawowe": ["name", "last_name", "nationality", "mass", "height"],
-            "Fizyka Najazdu": [
-                "inrun_drag_coefficient",
-                "inrun_frontal_area",
-                "inrun_lift_coefficient",
+            "Dane Podstawowe": ["name", "last_name", "nationality"],
+            "Najazd": [
+                "inrun_position",
             ],
-            "Fizyka Odbicia": [
-                "takeoff_drag_coefficient",
-                "takeoff_frontal_area",
-                "takeoff_lift_coefficient",
-                "jump_force",
+            "Wybicie": [
+                "takeoff_force",
             ],
-            "Fizyka Lotu": [
-                "flight_drag_coefficient",
-                "flight_frontal_area",
-                "flight_lift_coefficient",
+            "Lot": [
+                "flight_technique",
+                "flight_style",
+                "flight_resistance",
             ],
-            "Fizyka Lądowania": [
-                "landing_drag_coefficient",
-                "landing_frontal_area",
-                "landing_lift_coefficient",
+            "Lądowanie": [
+                "telemark",
             ],
         }
         hill_groups = {
@@ -1416,18 +1645,12 @@ class MainWindow(QMainWindow):
             "name": "Imię zawodnika.",
             "last_name": "Nazwisko zawodnika.",
             "nationality": "Kod kraju (np. POL, GER, NOR). Wpływa na wyświetlaną flagę.",
-            "mass": "Masa skoczka w kilogramach. Wpływa na bezwładność i przyspieszenie.",
-            "height": "Wzrost skoczka w metrach (np. 1.75).",
-            "inrun_drag_coefficient": "Współczynnik oporu aerodynamicznego na najeździe. Wyższe wartości = niższa prędkość na progu.",
-            "inrun_frontal_area": "Powierzchnia czołowa na najeździe. Większa powierzchnia = niższa prędkość na progu.",
-            "inrun_lift_coefficient": "Siła nośna na najeździe (zazwyczaj 0 lub bliska zera).",
-            "takeoff_drag_coefficient": "Opór aerodynamiczny w fazie odbicia (gdy skoczek się prostuje).",
-            "takeoff_frontal_area": "Powierzchnia czołowa w fazie odbicia.",
-            "takeoff_lift_coefficient": "Siła nośna w fazie odbicia (zazwyczaj 0).",
-            "jump_force": "Moc odbicia skoczka. Kluczowy parametr wpływający na parabolę lotu. Typowe wartości: 1400-1800.",
-            "flight_drag_coefficient": "Współczynnik oporu aerodynamicznego w locie. Wyższe wartości = krótsze skoki.",
-            "flight_frontal_area": "Powierzchnia czołowa w locie.",
-            "flight_lift_coefficient": "Współczynnik siły nośnej w locie. Wyższe wartości = dłuższy, bardziej płaski lot. Typowe wartości: 0.6-0.8.",
+            "inrun_position": "Pozycja najazdowa skoczka. Wyższe wartości = lepsza aerodynamika = wyższa prędkość na progu.",
+            "takeoff_force": "Siła wybicia skoczka. Wyższe wartości = większa siła odbicia = dłuższe skoki. Kluczowy parametr wpływający na parabolę lotu.",
+            "flight_technique": "Technika lotu skoczka. Wyższe wartości = lepsze wykorzystanie siły nośnej = dłuższe skoki.",
+            "flight_style": "Styl lotu skoczka. Normalny = zrównoważony styl. Agresywny = mniejsza powierzchnia czołowa. Pasywny = większa powierzchnia czołowa.",
+            "flight_resistance": "Opór powietrza w locie. Wyższe wartości = mniejszy opór aerodynamiczny = dłuższe skoki.",
+            "telemark": "Umiejętność lądowania telemarkiem. Wyższe wartości = częstsze i ładniejsze lądowania telemarkiem.",
             "landing_drag_coefficient": "Opór aerodynamiczny podczas lądowania (bardzo wysoki).",
             "landing_frontal_area": "Powierzchnia czołowa podczas lądowania (największa).",
             "landing_lift_coefficient": "Siła nośna podczas lądowania (zazwyczaj 0).",
@@ -1468,17 +1691,12 @@ class MainWindow(QMainWindow):
 
             for attr in attributes:
                 widget = None
-                if attr in ["K", "L", "gates", "jump_force"]:
+                if attr in ["K", "L", "gates"]:
                     widget = CustomSpinBox()
-                    if attr == "jump_force":
-                        widget.setRange(0, 3000)
-                    else:
-                        widget.setRange(0, 500)
+                    widget.setRange(0, 500)
                 elif (
                     "coefficient" in attr
                     or "area" in attr
-                    or "mass" in attr
-                    or "height" in attr
                     or attr
                     in [
                         "e1",
@@ -1499,6 +1717,49 @@ class MainWindow(QMainWindow):
                     widget.setRange(-10000.0, 10000.0)
                     widget.setDecimals(4)
                     widget.setSingleStep(0.01)
+                elif attr in [
+                    "inrun_position",
+                    "takeoff_force",
+                    "flight_technique",
+                    "flight_resistance",
+                    "telemark",
+                ]:
+                    widget = CustomSlider()
+                    widget.setRange(0, 100)
+                elif attr == "flight_style":
+                    widget = QComboBox()
+                    widget.addItems(["Normalny", "Agresywny", "Pasywny"])
+                    # Ustawienie odpowiedniego rozmiaru dla dropdowna
+                    widget.setFixedHeight(
+                        35
+                    )  # Większa wysokość aby tekst był w pełni widoczny
+                    widget.setStyleSheet("""
+                        QComboBox {
+                            padding: 4px;
+                            border: 1px solid #555;
+                            border-radius: 4px;
+                            background: #2b2b2b;
+                            color: #ffffff;
+                            font-size: 14px;
+                        }
+                        QComboBox::drop-down {
+                            border: none;
+                            width: 20px;
+                        }
+                        QComboBox::down-arrow {
+                            image: none;
+                            border-left: 5px solid transparent;
+                            border-right: 5px solid transparent;
+                            border-top: 5px solid #ffffff;
+                            margin-right: 5px;
+                        }
+                        QComboBox QAbstractItemView {
+                            background: #2b2b2b;
+                            color: #ffffff;
+                            border: 1px solid #555;
+                            selection-background-color: #0078d4;
+                        }
+                    """)
                 elif "deg" in attr:
                     widget = CustomDoubleSpinBox()
                     widget.setRange(-10000.0, 10000.0)
@@ -1507,7 +1768,9 @@ class MainWindow(QMainWindow):
                     widget = QLineEdit()
 
                 # Ustawienie ikon w zależności od motywu
-                if isinstance(widget, (CustomSpinBox, CustomDoubleSpinBox)):
+                if isinstance(
+                    widget, (CustomSpinBox, CustomDoubleSpinBox, CustomSlider)
+                ):
                     if self.current_theme == "dark":
                         widget.set_button_icons(
                             self.up_arrow_icon_dark, self.down_arrow_icon_dark
@@ -1517,9 +1780,22 @@ class MainWindow(QMainWindow):
                             self.up_arrow_icon_light, self.down_arrow_icon_light
                         )
 
-                label_text = (
-                    attr.replace("_", " ").replace("deg", "(deg)").capitalize() + ":"
-                )
+                # Special case for Polish labels
+                if attr == "inrun_position":
+                    label_text = "Pozycja najazdowa:"
+                elif attr == "takeoff_force":
+                    label_text = "Siła wybicia:"
+                elif attr == "flight_technique":
+                    label_text = "Technika lotu:"
+                elif attr == "flight_style":
+                    label_text = "Styl lotu:"
+                elif attr == "flight_resistance":
+                    label_text = "Opór powietrza:"
+                else:
+                    label_text = (
+                        attr.replace("_", " ").replace("deg", "(deg)").capitalize()
+                        + ":"
+                    )
 
                 label_widget = QLabel(label_text)
                 label_widget.setToolTip(tooltips.get(attr, ""))
@@ -1652,6 +1928,62 @@ class MainWindow(QMainWindow):
                     break
 
         elif current_tab_index == 1:  # Skocznie
+            new_hill = Hill(name="Nowa Skocznia", country="POL", K=90, L=120, gates=10)
+            self.all_hills.append(new_hill)
+
+            item = QListWidgetItem(
+                self.create_rounded_flag_icon(new_hill.country), str(new_hill)
+            )
+            item.setData(Qt.UserRole, new_hill)
+            self.editor_hill_list.addItem(item)
+            self._sort_editor_lists()
+            for i in range(self.editor_hill_list.count()):
+                if self.editor_hill_list.item(i).data(Qt.UserRole) == new_hill:
+                    self.editor_hill_list.setCurrentRow(i)
+                    self.editor_hill_list.scrollToItem(
+                        self.editor_hill_list.item(i),
+                        QListWidget.ScrollHint.PositionAtCenter,
+                    )
+                    break
+
+        self._refresh_all_data_widgets()
+
+    def _clone_selected_item(self):
+        self.play_sound()
+        current_tab_index = self.editor_tab_widget.currentIndex()
+
+        if current_tab_index == 0:  # Skoczkowie
+            selected_item = self.editor_jumper_list.currentItem()
+            if not selected_item:
+                QMessageBox.information(
+                    self,
+                    "Informacja",
+                    "Aby sklonować skoczka, najpierw zaznacz go na liście.",
+                )
+                return
+
+            jumper_to_clone = selected_item.data(Qt.UserRole)
+            new_jumper = copy.deepcopy(jumper_to_clone)
+            new_jumper.name = f"{jumper_to_clone.name} (kopia)"
+
+            self.all_jumpers.append(new_jumper)
+
+            item = QListWidgetItem(
+                self.create_rounded_flag_icon(new_jumper.nationality), str(new_jumper)
+            )
+            item.setData(Qt.UserRole, new_jumper)
+            self.editor_jumper_list.addItem(item)
+            self._sort_editor_lists()
+            for i in range(self.editor_jumper_list.count()):
+                if self.editor_jumper_list.item(i).data(Qt.UserRole) == new_jumper:
+                    self.editor_jumper_list.setCurrentRow(i)
+                    self.editor_jumper_list.scrollToItem(
+                        self.editor_jumper_list.item(i),
+                        QListWidget.ScrollHint.PositionAtCenter,
+                    )
+                    break
+
+        elif current_tab_index == 1:  # Skocznie
             selected_item = self.editor_hill_list.currentItem()
             if not selected_item:
                 QMessageBox.information(
@@ -1758,7 +2090,37 @@ class MainWindow(QMainWindow):
 
             widget.blockSignals(True)
             try:
-                if isinstance(widget, QLineEdit):
+                if attr == "inrun_position":
+                    # Konwertuj inrun_drag_coefficient na wartość slidera
+                    drag_coeff = getattr(data_obj, "inrun_drag_coefficient", 0.46)
+                    slider_value = drag_coefficient_to_slider(drag_coeff)
+                    widget.setValue(slider_value)
+                elif attr == "takeoff_force":
+                    # Konwertuj jump_force na wartość slidera
+                    jump_force = getattr(data_obj, "jump_force", 1500.0)
+                    slider_value = jump_force_to_slider(jump_force)
+                    widget.setValue(slider_value)
+                elif attr == "flight_technique":
+                    # Konwertuj flight_lift_coefficient na wartość slidera
+                    lift_coeff = getattr(data_obj, "flight_lift_coefficient", 0.8)
+                    slider_value = lift_coefficient_to_slider(lift_coeff)
+                    widget.setValue(slider_value)
+                elif attr == "flight_style":
+                    # Konwertuj flight_frontal_area na styl
+                    frontal_area = getattr(data_obj, "flight_frontal_area", 0.52)
+                    style = frontal_area_to_style(frontal_area)
+                    widget.setCurrentText(style)
+                elif attr == "flight_resistance":
+                    # Konwertuj flight_drag_coefficient na wartość slidera
+                    drag_coeff = getattr(data_obj, "flight_drag_coefficient", 0.5)
+                    slider_value = drag_coefficient_flight_to_slider(drag_coeff)
+                    widget.setValue(slider_value)
+                elif attr == "telemark":
+                    # Ustaw wartość telemark bezpośrednio (nie fizyczna)
+                    telemark_value = getattr(data_obj, "telemark", 50)
+                    widget.setValue(int(telemark_value))
+
+                elif isinstance(widget, QLineEdit):
                     widget.setText(str(value) if value is not None else "")
                 elif isinstance(widget, (QDoubleSpinBox, QSpinBox)):
                     if value is None:
@@ -1794,6 +2156,7 @@ class MainWindow(QMainWindow):
         widgets = {}
         if isinstance(data_obj, Jumper):
             widgets = self.jumper_edit_widgets
+
         elif isinstance(data_obj, Hill):
             widgets = self.hill_edit_widgets
 
@@ -1802,8 +2165,54 @@ class MainWindow(QMainWindow):
                 continue
 
             try:
-                if isinstance(widget, QLineEdit):
+                if attr == "inrun_position":
+                    # Konwertuj wartość slidera na inrun_drag_coefficient
+                    slider_value = widget.value()
+                    drag_coefficient = slider_to_drag_coefficient(slider_value)
+                    setattr(data_obj, "inrun_drag_coefficient", drag_coefficient)
+                elif attr == "takeoff_force":
+                    # Konwertuj wartość slidera na jump_force
+                    slider_value = widget.value()
+                    jump_force = slider_to_jump_force(slider_value)
+                    setattr(data_obj, "jump_force", jump_force)
+                elif attr == "flight_technique":
+                    # Konwertuj wartość slidera na flight_lift_coefficient
+                    slider_value = widget.value()
+                    lift_coefficient = slider_to_lift_coefficient(slider_value)
+                    setattr(data_obj, "flight_lift_coefficient", lift_coefficient)
+                elif attr == "flight_style":
+                    # Konwertuj styl na parametry fizyczne
+                    style = widget.currentText()
+                    old_style = getattr(data_obj, "flight_style", "Normalny")
+
+                    # Sprawdź czy styl się rzeczywiście zmienił
+                    if style != old_style:
+                        frontal_area = style_to_frontal_area(style)
+                        setattr(data_obj, "flight_frontal_area", frontal_area)
+                        setattr(data_obj, "flight_style", style)
+
+                        # Aplikuj dodatkowe efekty stylu na inne parametry
+                        apply_style_physics(data_obj, style)
+                    else:
+                        # Jeśli styl się nie zmienił, tylko zaktualizuj flight_frontal_area
+                        frontal_area = style_to_frontal_area(style)
+                        setattr(data_obj, "flight_frontal_area", frontal_area)
+                        setattr(data_obj, "flight_style", style)
+                elif attr == "flight_resistance":
+                    # Konwertuj wartość slidera na flight_drag_coefficient
+                    slider_value = widget.value()
+                    drag_coefficient = slider_to_drag_coefficient_flight(slider_value)
+                    setattr(data_obj, "flight_drag_coefficient", drag_coefficient)
+                elif attr == "telemark":
+                    # Zapisz wartość telemark bezpośrednio (nie fizyczna)
+                    slider_value = widget.value()
+                    setattr(data_obj, "telemark", slider_value)
+
+                elif isinstance(widget, QLineEdit):
                     new_value = widget.text()
+                    setattr(data_obj, attr, new_value)
+                elif isinstance(widget, QComboBox):
+                    new_value = widget.currentText()
                     setattr(data_obj, attr, new_value)
                 elif isinstance(widget, QDoubleSpinBox):
                     new_value = widget.value()
@@ -1917,8 +2326,8 @@ class MainWindow(QMainWindow):
     def _create_jump_replay_page(self):
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setSpacing(15)
-        layout.setContentsMargins(50, 20, 50, 50)
+        layout.setSpacing(8)
+        layout.setContentsMargins(15, 8, 15, 15)
 
         layout.addLayout(self._create_top_bar("Powtórka skoku", self.COMPETITION_IDX))
 
@@ -1943,97 +2352,12 @@ class MainWindow(QMainWindow):
     def _create_points_breakdown_page(self):
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setSpacing(15)
-        layout.setContentsMargins(50, 20, 50, 50)
+        layout.setSpacing(8)
+        layout.setContentsMargins(15, 8, 15, 15)
 
         layout.addLayout(self._create_top_bar("Podział punktów", self.COMPETITION_IDX))
 
-        # Tytuł z informacjami o zawodniku
-        self.points_title_label = QLabel("Imię i nazwisko skoczka")
-        self.points_title_label.setObjectName("replayTitleLabel")
-        self.points_title_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.points_title_label)
-
-        self.points_info_label = QLabel("Informacje o skoku")
-        self.points_info_label.setObjectName("replayStatsLabel")
-        self.points_info_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.points_info_label)
-
-        # Główny layout z podziałem na dwie kolumny
-        main_hbox = QHBoxLayout()
-
-        # Lewa kolumna - Podział punktów
-        points_panel = QVBoxLayout()
-        points_panel.setSpacing(15)
-
-        # Tabela z podziałem punktów
-        self.points_breakdown_table = QTableWidget()
-        self.points_breakdown_table.setColumnCount(3)
-        self.points_breakdown_table.setRowCount(4)
-        self.points_breakdown_table.setHorizontalHeaderLabels(
-            ["Element", "Wartość", "Punkty"]
-        )
-        self.points_breakdown_table.verticalHeader().setVisible(False)
-        self.points_breakdown_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.Stretch
-        )
-        self.points_breakdown_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        # Styl tabeli breakdown - będzie aktualizowany w update_styles()
-        self.points_breakdown_table.setStyleSheet("")
-        points_panel.addWidget(self.points_breakdown_table)
-
-        # Formuła obliczeniowa
-        self.points_formula_group = QGroupBox("Formuła obliczeniowa")
-        self.points_formula_group.setStyleSheet("""
-            QGroupBox {
-                font-weight: bold;
-                color: #ffffff;
-                border: 2px solid #4a4a4a;
-                border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px 0 5px;
-            }
-        """)
-        formula_layout = QVBoxLayout(self.points_formula_group)
-
-        self.points_formula_text = QLabel(
-            "Punkty = 60.0 + (różnica od K-point × meter value)"
-        )
-        self.points_formula_text.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                color: #ffffff;
-                padding: 10px;
-                background-color: #3a3a3a;
-                border-radius: 6px;
-            }
-        """)
-        self.points_formula_text.setAlignment(Qt.AlignCenter)
-        formula_layout.addWidget(self.points_formula_text)
-
-        # Konkretne obliczenia
-        self.points_calculation_text = QLabel()
-        self.points_calculation_text.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                color: #059669;
-                padding: 10px;
-                background-color: rgba(5, 150, 105, 0.1);
-                border-radius: 6px;
-                font-weight: bold;
-            }
-        """)
-        self.points_calculation_text.setAlignment(Qt.AlignCenter)
-        formula_layout.addWidget(self.points_calculation_text)
-
-        points_panel.addWidget(self.points_formula_group)
-
-        # Informacje o skoczni
+        # Hill information at the top
         self.points_hill_info_group = QGroupBox("Informacje o skoczni")
         self.points_hill_info_group.setStyleSheet("""
             QGroupBox {
@@ -2055,9 +2379,10 @@ class MainWindow(QMainWindow):
         self.points_hill_name = QLabel()
         self.points_hill_name.setStyleSheet("""
             QLabel {
-                font-size: 12px;
+                font-size: 14px;
                 color: #ffffff;
                 padding: 5px;
+                font-weight: bold;
             }
         """)
         hill_info_layout.addWidget(self.points_hill_name)
@@ -2066,13 +2391,43 @@ class MainWindow(QMainWindow):
         self.points_gate_info.setStyleSheet("""
             QLabel {
                 font-size: 12px;
-                color: #ffffff;
+                color: #cccccc;
                 padding: 5px;
             }
         """)
         hill_info_layout.addWidget(self.points_gate_info)
 
-        points_panel.addWidget(self.points_hill_info_group)
+        layout.addWidget(self.points_hill_info_group)
+
+        # Tytuł z informacjami o zawodniku
+        self.points_title_label = QLabel("Imię i nazwisko skoczka")
+        self.points_title_label.setObjectName("replayTitleLabel")
+        self.points_title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.points_title_label)
+
+        self.points_info_label = QLabel("Informacje o skoku")
+        self.points_info_label.setObjectName("replayStatsLabel")
+        self.points_info_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.points_info_label)
+
+        # Główny layout z podziałem na dwie kolumny
+        main_hbox = QHBoxLayout()
+
+        # Lewa kolumna - Podział punktów
+        points_panel = QVBoxLayout()
+        points_panel.setSpacing(10)
+
+        # Nowa wizualna tabela z kartami zamiast technicznej tabeli
+        self.points_breakdown_container = QWidget()
+        self.points_breakdown_layout = QVBoxLayout(self.points_breakdown_container)
+        self.points_breakdown_layout.setSpacing(6)
+
+        # Karty będą dodawane dynamicznie w _show_points_breakdown
+        points_panel.addWidget(self.points_breakdown_container)
+
+        # Usunięto starą grupę z notami sędziowskimi i starą formułę obliczeniową
+        # Teraz używamy tylko kart w self.points_breakdown_layout
+
         points_panel.addStretch()
         main_hbox.addLayout(points_panel, 1)
 
@@ -2434,7 +2789,7 @@ class MainWindow(QMainWindow):
             except (ValueError, TypeError):
                 return
 
-        # Kolumny z punktami to 4 (I seria) i 6 (II seria)
+        # Kolumny z punktami to 4 (I seria) i 6 (II seria) - tutaj będą wyświetlane noty sędziów
         elif column in [4, 6]:
             seria_num = 1 if column == 4 else 2
             points_str = self.results_table.item(row, column).text()
@@ -2445,11 +2800,15 @@ class MainWindow(QMainWindow):
             try:
                 points = float(points_str)
                 distance = result_data[f"d{seria_num}"]
+                judge_data = result_data[f"judges{seria_num}"]
+
+                # Pokaż podział punktów z notami sędziów jeśli dostępne
                 self._show_points_breakdown(
                     jumper,
                     distance,
                     points,
                     seria_num,
+                    judge_data,
                 )
             except (ValueError, TypeError):
                 return
@@ -2490,10 +2849,13 @@ class MainWindow(QMainWindow):
                 result["distance"],
                 "Q",
             )
-        # Sprawdź czy kliknięto w kolumnę z punktami (kolumna 4)
+        # Sprawdź czy kliknięto w kolumnę z punktami (kolumna 4) - tutaj będą wyświetlane noty sędziów
         elif column == 4 and result.get("points", 0) > 0:  # Punkty kwalifikacji
+            judge_data = result.get("judge_scores")
+
+            # Pokaż podział punktów z notami sędziów jeśli dostępne
             self._show_points_breakdown(
-                jumper, result["distance"], result["points"], "Q"
+                jumper, result["distance"], result["points"], "Q", judge_data
             )
 
     def _show_jump_replay(self, jumper, hill, gate, distance, seria_num):
@@ -2515,7 +2877,327 @@ class MainWindow(QMainWindow):
             self.replay_canvas, self.replay_figure, sim_data, hill
         )
 
-    def _show_points_breakdown(self, jumper, distance, points, seria_num):
+    def _create_distance_card(
+        self, distance, k_point, meter_value, difference, distance_points
+    ):
+        """Tworzy kartę z informacjami o odległości i obliczeniach punktów."""
+        card = QWidget()
+        card.setStyleSheet("""
+            QWidget {
+                background-color: #2a2a2a;
+                border: 1px solid #4a4a4a;
+                border-radius: 6px;
+                padding: 8px;
+                margin: 2px;
+            }
+        """)
+
+        layout = QVBoxLayout(card)
+        layout.setSpacing(6)
+
+        # Tytuł karty
+        title = QLabel("Punkty za odległość")
+        title.setStyleSheet("""
+            QLabel {
+                font-size: 13px;
+                font-weight: bold;
+                color: #ffffff;
+                padding: 2px;
+            }
+        """)
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title)
+
+        # Główna informacja o odległości
+        distance_info = QLabel(f"Odległość: {format_distance_with_unit(distance)}")
+        distance_info.setStyleSheet("""
+            QLabel {
+                font-size: 15px;
+                font-weight: bold;
+                color: #28a745;
+                padding: 6px;
+                background-color: rgba(40, 167, 69, 0.1);
+                border-radius: 4px;
+            }
+        """)
+        distance_info.setAlignment(Qt.AlignCenter)
+        layout.addWidget(distance_info)
+
+        # Szczegóły obliczeń
+        details_layout = QHBoxLayout()
+
+        # Lewa kolumna - wartości
+        left_col = QVBoxLayout()
+
+        k_point_label = QLabel(f"K-point: {k_point:.1f} m")
+        k_point_label.setStyleSheet("""
+            QLabel {
+                font-size: 11px;
+                color: #cccccc;
+                padding: 2px;
+            }
+        """)
+        left_col.addWidget(k_point_label)
+
+        difference_label = QLabel(f"Różnica: {difference:+.1f} m")
+        difference_label.setStyleSheet("""
+            QLabel {
+                font-size: 11px;
+                color: #cccccc;
+                padding: 2px;
+            }
+        """)
+        left_col.addWidget(difference_label)
+
+        meter_label = QLabel(f"Meter value: {meter_value:.1f} pkt/m")
+        meter_label.setStyleSheet("""
+            QLabel {
+                font-size: 11px;
+                color: #cccccc;
+                padding: 2px;
+            }
+        """)
+        left_col.addWidget(meter_label)
+
+        details_layout.addLayout(left_col)
+
+        # Prawa kolumna - obliczenia
+        right_col = QVBoxLayout()
+
+        base_points_label = QLabel("60.0 pkt")
+        base_points_label.setStyleSheet("""
+            QLabel {
+                font-size: 11px;
+                color: #28a745;
+                padding: 2px;
+                font-weight: bold;
+            }
+        """)
+        right_col.addWidget(base_points_label)
+
+        bonus_points = difference * meter_value
+        bonus_label = QLabel(f"{bonus_points:+.1f} pkt")
+        bonus_label.setStyleSheet("""
+            QLabel {
+                font-size: 11px;
+                color: #0078d4;
+                padding: 2px;
+                font-weight: bold;
+            }
+        """)
+        right_col.addWidget(bonus_label)
+
+        total_distance_label = QLabel(f"{distance_points:.1f} pkt")
+        total_distance_label.setStyleSheet("""
+            QLabel {
+                font-size: 13px;
+                color: #ffffff;
+                padding: 4px;
+                background-color: #28a745;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+        """)
+        total_distance_label.setAlignment(Qt.AlignCenter)
+        right_col.addWidget(total_distance_label)
+
+        details_layout.addLayout(right_col)
+        layout.addLayout(details_layout)
+
+        self.points_breakdown_layout.addWidget(card)
+
+    def _create_judge_card(self, judge_data):
+        """Tworzy kartę z informacjami o notach sędziowskich."""
+        card = QWidget()
+        card.setStyleSheet("""
+            QWidget {
+                background-color: #2a2a2a;
+                border: 1px solid #4a4a4a;
+                border-radius: 6px;
+                padding: 8px;
+                margin: 2px;
+            }
+        """)
+
+        layout = QVBoxLayout(card)
+        layout.setSpacing(4)
+
+        # Tytuł karty
+        title = QLabel("Punkty za noty")
+        title.setStyleSheet("""
+            QLabel {
+                font-size: 13px;
+                font-weight: bold;
+                color: #ffffff;
+                padding: 2px;
+            }
+        """)
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title)
+
+        # Noty sędziowskie w poziomie
+        scores_layout = QHBoxLayout()
+        scores_layout.setSpacing(6)
+
+        all_scores = judge_data["all_scores"]
+
+        # Zawsze pokazuj 3 środkowe noty na zielono, 2 skrajne na czerwono.
+        # Niezależnie od duplikatów, zawsze dokładnie 2 noty są czerwone (najniższa i najwyższa).
+
+        # Tworzymy listę krotek (wynik, oryginalny_indeks)
+        indexed_scores = [(score, i) for i, score in enumerate(all_scores)]
+
+        # Sortujemy po wyniku, aby znaleźć najniższy i najwyższy element
+        sorted_indexed_scores = sorted(indexed_scores, key=lambda x: x[0])
+
+        # Zbieramy oryginalne indeksy, które mają być czerwone (pierwszy i ostatni z posortowanej listy)
+        red_indices = {sorted_indexed_scores[0][1], sorted_indexed_scores[-1][1]}
+
+        for i, score in enumerate(all_scores):
+            score_widget = QWidget()
+            score_layout = QVBoxLayout(score_widget)
+            score_layout.setSpacing(2)
+
+            # Nazwa sędziego
+            judge_name = QLabel(f"Sędzia {i + 1}")
+            judge_name.setStyleSheet("""
+                QLabel {
+                    font-size: 9px;
+                    color: #cccccc;
+                    font-weight: bold;
+                }
+            """)
+            judge_name.setAlignment(Qt.AlignCenter)
+            score_layout.addWidget(judge_name)
+
+            # Nota
+            score_label = QLabel(f"{score:.1f}")
+            score_label.setAlignment(Qt.AlignCenter)
+            score_label.setMinimumSize(35, 25)
+
+            # Kolorowanie not - zawsze 2 skrajne na czerwono, 3 środkowe na zielono
+            if i in red_indices:
+                # Czerwony dla wykluczonych not (2 skrajne)
+                score_label.setStyleSheet("""
+                    QLabel {
+                        font-size: 13px;
+                        font-weight: bold;
+                        color: #ffffff;
+                        background-color: #dc3545;
+                        border-radius: 4px;
+                        padding: 4px;
+                    }
+                """)
+            else:
+                # Zielony dla liczonych not (3 środkowe)
+                score_label.setStyleSheet("""
+                    QLabel {
+                        font-size: 13px;
+                        font-weight: bold;
+                        color: #ffffff;
+                        background-color: #28a745;
+                        border-radius: 4px;
+                        padding: 4px;
+                    }
+                """)
+
+            score_layout.addWidget(score_label)
+            scores_layout.addWidget(score_widget)
+
+        layout.addLayout(scores_layout)
+
+        # Suma not
+        total_judge_points = judge_data["total_score"]
+        judge_summary = QLabel(f"Suma (bez skrajnych): {total_judge_points:.1f} pkt")
+        judge_summary.setStyleSheet("""
+            QLabel {
+                font-size: 12px;
+                font-weight: bold;
+                color: #0078d4;
+                padding: 6px;
+                background-color: rgba(0, 120, 212, 0.1);
+                border-radius: 4px;
+            }
+        """)
+        judge_summary.setAlignment(Qt.AlignCenter)
+        layout.addWidget(judge_summary)
+
+        # Informacja o lądowaniu
+        landing_info = "Lądowanie: "
+        if judge_data["telemark_landing"]:
+            landing_info += "Telemark ✅"
+        else:
+            landing_info += "Zwykłe"
+
+        landing_label = QLabel(landing_info)
+        landing_label.setStyleSheet("""
+            QLabel {
+                font-size: 10px;
+                color: #cccccc;
+                padding: 2px;
+            }
+        """)
+        landing_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(landing_label)
+
+        self.points_breakdown_layout.addWidget(card)
+
+    def _create_total_card(self, distance_points, judge_data):
+        """Tworzy kartę z sumą punktów."""
+        card = QWidget()
+        card.setStyleSheet("""
+            QWidget {
+                background-color: #1a1a1a;
+                border: 1px solid #28a745;
+                border-radius: 6px;
+                padding: 8px;
+                margin: 3px;
+            }
+        """)
+
+        layout = QVBoxLayout(card)
+        layout.setSpacing(4)
+
+        # Tytuł karty
+        title = QLabel("Suma punktów")
+        title.setStyleSheet("""
+            QLabel {
+                font-size: 13px;
+                font-weight: bold;
+                color: #ffffff;
+                padding: 2px;
+            }
+        """)
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title)
+
+        # Minimalistyczna suma punktów
+        if judge_data:
+            judge_points = judge_data["total_score"]
+            total_points = distance_points + judge_data["total_score"]
+            calc_text = f"{total_points:.1f} pkt"
+        else:
+            calc_text = f"{distance_points:.1f} pkt"
+
+        calc_label = QLabel(calc_text)
+        calc_label.setStyleSheet("""
+            QLabel {
+                font-size: 15px;
+                font-weight: bold;
+                color: #28a745;
+                padding: 4px;
+                background-color: rgba(40, 167, 69, 0.1);
+                border-radius: 4px;
+            }
+        """)
+        calc_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(calc_label)
+
+        self.points_breakdown_layout.addWidget(card)
+
+    def _show_points_breakdown(
+        self, jumper, distance, points, seria_num, judge_data=None
+    ):
         """Wyświetla szczegółowy podział punktów za skok na pełnej stronie z animacją w tle."""
         k_point = self.competition_hill.K
         meter_value = get_meter_value(k_point)
@@ -2530,58 +3212,41 @@ class MainWindow(QMainWindow):
         )
         self.points_info_label.setText(stats_text)
 
-        # Wypełnij tabelę danymi
-        data = [
-            ("Odległość skoku", format_distance_with_unit(distance), ""),
-            ("Punkt K skoczni", f"{k_point:.1f} m", ""),
-            ("Różnica od K-point", f"{difference:+.1f} m", ""),
-            ("Meter value", f"{meter_value:.1f} pkt/m", ""),
-        ]
+        # Clear existing breakdown cards
+        while self.points_breakdown_layout.count() > 0:
+            item = self.points_breakdown_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
 
-        # Oblicz punkty dla każdego elementu
-        base_points = 60.0
-        distance_points = base_points
-        k_point_points = 0  # K-point to punkt odniesienia
-        difference_points = difference * meter_value
-        meter_value_points = 0  # Meter value to współczynnik
+        # Calculate distance points
+        distance_points = 60.0 + (difference * meter_value)
 
-        points_data = [
-            (
-                "Odległość skoku",
-                format_distance_with_unit(distance),
-                f"{distance_points:.1f}",
-            ),
-            ("Punkt K skoczni", f"{k_point:.1f} m", f"{k_point_points:.1f}"),
-            ("Różnica od K-point", f"{difference:+.1f} m", f"{difference_points:+.1f}"),
-            ("Meter value", f"{meter_value:.1f} pkt/m", f"{meter_value_points:.1f}"),
-        ]
-
-        for row, (element, value, points_val) in enumerate(points_data):
-            element_item = QTableWidgetItem(element)
-            element_item.setBackground(QColor("#3a3a3a"))
-            element_item.setForeground(QColor("#ffffff"))
-            self.points_breakdown_table.setItem(row, 0, element_item)
-
-            value_item = QTableWidgetItem(value)
-            value_item.setBackground(QColor("#2a2a2a"))
-            value_item.setForeground(QColor("#ffffff"))
-            value_item.setTextAlignment(Qt.AlignCenter)
-            self.points_breakdown_table.setItem(row, 1, value_item)
-
-            points_item = QTableWidgetItem(points_val)
-            points_item.setBackground(QColor("#2a2a2a"))
-            points_item.setForeground(QColor("#ffffff"))
-            points_item.setTextAlignment(Qt.AlignCenter)
-            self.points_breakdown_table.setItem(row, 2, points_item)
-
-        # Aktualizuj konkretne obliczenia
-        self.points_calculation_text.setText(
-            f"Punkty = 60.0 + ({difference:+.1f} × {meter_value:.1f}) = {points:.1f}"
+        # Create visual breakdown cards
+        self._create_distance_card(
+            distance, k_point, meter_value, difference, distance_points
         )
+
+        if judge_data:
+            self._create_judge_card(judge_data)
+
+        self._create_total_card(distance_points, judge_data)
+
+        # Calculate judge points if available
+        judge_points = 0.0
+        if judge_data:
+            judge_points = judge_data["total_score"]
+
+        # Calculate total points
+        total_points = distance_points + judge_points
+
+        # Usunięto referencje do starej formuły obliczeniowej
 
         # Aktualizuj informacje o skoczni
         self.points_hill_name.setText(f"Skocznia: {self.competition_hill}")
         self.points_gate_info.setText(f"Belka startowa: {self.competition_gate}")
+
+        # Dodaj noty sędziowskie jeśli dostępne są dane
+        # Usunięto referencje do starej grupy z notami sędziowskimi
 
         # Uruchom animację trajektorii w tle
         sim_data = self._calculate_trajectory(
@@ -2608,7 +3273,13 @@ class MainWindow(QMainWindow):
         )
         self.points_info_label.setText(stats_text)
 
-        # Przygotuj dane dla obu serii
+        # Clear existing breakdown cards
+        while self.points_breakdown_layout.count() > 0:
+            item = self.points_breakdown_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        # Prepare data for both series
         series_data = []
         if result_data.get("d1", 0) > 0 and result_data.get("p1", 0) > 0:
             d1 = result_data["d1"]
@@ -2622,96 +3293,24 @@ class MainWindow(QMainWindow):
             diff2 = d2 - k_point
             series_data.append(("II seria", d2, p2, diff2))
 
-        # Wypełnij tabelę danymi
-        points_data = []
-
-        # Dodaj wiersze dla każdej serii
+        # Create cards for each series
         for seria_name, distance, points, difference in series_data:
-            points_data.append(
-                (
-                    f"{seria_name} - Odległość",
-                    format_distance_with_unit(distance),
-                    f"{points:.1f}",
-                )
-            )
-            points_data.append(
-                (
-                    f"{seria_name} - Różnica od K-point",
-                    f"{difference:+.1f} m",
-                    f"{difference * meter_value:+.1f}",
-                )
-            )
-            points_data.append(
-                (f"{seria_name} - Punkty", f"{points:.1f} pkt", f"{points:.1f}")
-            )
-            # Dodaj pusty wiersz jako separator
-            points_data.append(("", "", ""))
-
-        # Dodaj wiersz z sumą
-        if len(series_data) > 0:
-            points_data.append(
-                ("SUMA PUNKTÓW", f"{total_points:.1f} pkt", f"{total_points:.1f}")
+            self._create_series_summary_card(
+                seria_name, distance, points, difference, k_point, meter_value
             )
 
-        # Wyczyść tabelę i ustaw odpowiednią liczbę wierszy
-        self.points_breakdown_table.setRowCount(len(points_data))
-
-        for row, (element, value, points_val) in enumerate(points_data):
-            element_item = QTableWidgetItem(element)
-            if element == "SUMA PUNKTÓW":
-                element_item.setBackground(QColor("#dc3545"))
-                element_item.setForeground(QColor("#ffffff"))
-                element_item.setFont(QFont("Arial", 10, QFont.Weight.Bold))
-            elif element == "":
-                element_item.setBackground(QColor("#1a1a1a"))
-                element_item.setForeground(QColor("#1a1a1a"))
-            else:
-                element_item.setBackground(QColor("#3a3a3a"))
-                element_item.setForeground(QColor("#ffffff"))
-            self.points_breakdown_table.setItem(row, 0, element_item)
-
-            value_item = QTableWidgetItem(value)
-            if element == "SUMA PUNKTÓW":
-                value_item.setBackground(QColor("#dc3545"))
-                value_item.setForeground(QColor("#ffffff"))
-                value_item.setFont(QFont("Arial", 10, QFont.Weight.Bold))
-            elif element == "":
-                value_item.setBackground(QColor("#1a1a1a"))
-                value_item.setForeground(QColor("#1a1a1a"))
-            else:
-                value_item.setBackground(QColor("#2a2a2a"))
-                value_item.setForeground(QColor("#ffffff"))
-            value_item.setTextAlignment(Qt.AlignCenter)
-            self.points_breakdown_table.setItem(row, 1, value_item)
-
-            points_item = QTableWidgetItem(points_val)
-            if element == "SUMA PUNKTÓW":
-                points_item.setBackground(QColor("#dc3545"))
-                points_item.setForeground(QColor("#ffffff"))
-                points_item.setFont(QFont("Arial", 10, QFont.Weight.Bold))
-            elif element == "":
-                points_item.setBackground(QColor("#1a1a1a"))
-                points_item.setForeground(QColor("#1a1a1a"))
-            else:
-                points_item.setBackground(QColor("#2a2a2a"))
-                points_item.setForeground(QColor("#ffffff"))
-            points_item.setTextAlignment(Qt.AlignCenter)
-            self.points_breakdown_table.setItem(row, 2, points_item)
+        # Add a total card for both series
+        self._create_total_card(
+            total_points, None
+        )  # Pass None for judge_data as it's a total sum
 
         # Aktualizuj informacje o skoczni
         self.points_hill_name.setText(f"Skocznia: {self.competition_hill}")
         self.points_gate_info.setText(f"Belka startowa: {self.competition_gate}")
 
-        # Aktualizuj formułę obliczeniową
-        calculation_text = "Formuła obliczeniowa:\n"
-        if len(series_data) == 2:
-            calculation_text += f"Suma punktów = {series_data[0][2]:.1f} pkt (I seria) + {series_data[1][2]:.1f} pkt (II seria) = {total_points:.1f} pkt"
-        elif len(series_data) == 1:
-            calculation_text += f"Suma punktów = {series_data[0][2]:.1f} pkt ({series_data[0][0]}) = {total_points:.1f} pkt"
-        else:
-            calculation_text += f"Suma punktów = {total_points:.1f} pkt"
+        # Usunięto referencje do starej formuły obliczeniowej
 
-        self.points_calculation_text.setText(calculation_text)
+        # Usunięto referencje do starej grupy z notami sędziowskimi
 
         # Uruchom animację trajektorii w tle (użyj pierwszej serii jeśli dostępna)
         if result_data.get("d1", 0) > 0:
@@ -2830,6 +3429,30 @@ class MainWindow(QMainWindow):
         }
 
     def _run_animation_on_canvas(self, canvas, figure, sim_data, hill):
+        # Zatrzymaj poprzednią animację jeśli istnieje
+        # Użyj różnych zmiennych animacji dla różnych canvasów
+        if canvas == self.points_canvas:
+            animation_var = "points_ani"
+        elif canvas == self.replay_canvas:
+            animation_var = "replay_ani"
+        else:
+            animation_var = "ani"  # fallback dla innych canvasów
+
+        # Zatrzymaj wszystkie animacje dla tego canvasu
+        for var in ["ani", "points_ani", "replay_ani", "zoom_ani"]:
+            if hasattr(self, var) and getattr(self, var) is not None:
+                try:
+                    current_ani = getattr(self, var)
+                    if (
+                        hasattr(current_ani, "event_source")
+                        and current_ani.event_source is not None
+                    ):
+                        current_ani.event_source.stop()
+                except Exception:
+                    pass  # Ignoruj błędy przy zatrzymywaniu animacji
+                setattr(self, var, None)
+
+        # Wyczyść figure przed rozpoczęciem nowej animacji
         figure.clear()
         ax = figure.add_subplot(111)
         ax.set_facecolor(
@@ -2847,16 +3470,18 @@ class MainWindow(QMainWindow):
         ax.plot(x_inrun, y_inrun, color="#00aaff", linewidth=3)
 
         max_y_inrun = y_inrun[0] if len(y_inrun) > 0 else 0
-        # Zawsze pokazuj całą skocznię - ustaw stałe limity
-        ax.set_xlim(-inrun_length_to_show - 5, hill.n + hill.a_finish + 50)
+        # Poprawione limity - animacja będzie wyżej i ładniej sformatowana
+        ax.set_xlim(-inrun_length_to_show - 5, hill.n + hill.a_finish + 30)
         ax.set_ylim(
-            min(min(sim_data["y_landing"]), 0) - 5,
-            max(sim_data["max_height"] * 1.5, max_y_inrun) + 5,
+            min(min(sim_data["y_landing"]), 0) - 3,
+            max(sim_data["max_height"] * 1.3, max_y_inrun) + 3,
         )
 
-        (jumper_point,) = ax.plot([], [], "ro", markersize=8)
-        (trail_line,) = ax.plot([], [], color="#4da8ff", linewidth=2, alpha=0.5)
-        (landing_line,) = ax.plot([], [], color="#00aaff", linewidth=3)
+        (jumper_point,) = ax.plot(
+            [], [], "ro", markersize=10, markeredgecolor="white", markeredgewidth=2
+        )
+        (trail_line,) = ax.plot([], [], color="#4da8ff", linewidth=3, alpha=0.7)
+        (landing_line,) = ax.plot([], [], color="#00aaff", linewidth=4, alpha=0.8)
         plot_elements = [jumper_point, trail_line, landing_line]
 
         def init():
@@ -2871,8 +3496,17 @@ class MainWindow(QMainWindow):
                 sim_data["y_landing"],
             )
             if frame >= max(len(positions), len(x_landing)):
-                if hasattr(self, "ani") and self.ani:
-                    self.ani.event_source.stop()
+                # Zatrzymaj animację gdy się skończy
+                try:
+                    current_ani = getattr(self, animation_var)
+                    if (
+                        hasattr(current_ani, "event_source")
+                        and current_ani.event_source is not None
+                    ):
+                        current_ani.event_source.stop()
+                except Exception:
+                    pass
+                setattr(self, animation_var, None)
                 return plot_elements
             if frame < len(positions):
                 x, y = positions[frame]
@@ -2885,15 +3519,16 @@ class MainWindow(QMainWindow):
                 landing_line.set_data(x_landing[:frame], y_landing[:frame])
             return plot_elements
 
-        self.ani = animation.FuncAnimation(
+        new_ani = animation.FuncAnimation(
             figure,
             update,
             init_func=init,
             frames=max(len(sim_data["positions"]), len(sim_data["x_landing"])),
-            interval=5,
+            interval=8,
             blit=False,
             repeat=False,
         )
+        setattr(self, animation_var, new_ani)
         canvas.draw()
 
     def run_simulation(self):
@@ -3029,9 +3664,22 @@ class MainWindow(QMainWindow):
         if hasattr(self, "figure"):
             self.figure.clear()
             self.canvas.draw()
-        if self.ani:
-            self.ani.event_source.stop()
-            self.ani = None
+        # Zatrzymaj wszystkie animacje
+        for animation_var in ["ani", "points_ani", "replay_ani", "zoom_ani"]:
+            if (
+                hasattr(self, animation_var)
+                and getattr(self, animation_var) is not None
+            ):
+                try:
+                    current_ani = getattr(self, animation_var)
+                    if (
+                        hasattr(current_ani, "event_source")
+                        and current_ani.event_source is not None
+                    ):
+                        current_ani.event_source.stop()
+                except Exception:
+                    pass  # Ignoruj błędy przy zatrzymywaniu animacji
+                setattr(self, animation_var, None)
 
     def change_theme(self, theme):
         theme_mapping = {
@@ -3181,6 +3829,8 @@ class MainWindow(QMainWindow):
                     "d2": 0.0,
                     "p1": 0.0,  # Punkty za pierwszą serię
                     "p2": 0.0,  # Punkty za drugą serię
+                    "judges1": None,  # Noty sędziów za pierwszą serię
+                    "judges2": None,  # Noty sędziów za drugą serię
                 }
             )
 
@@ -3266,11 +3916,26 @@ class MainWindow(QMainWindow):
                     self.competition_hill, jumper, gate_number=self.competition_gate
                 )
                 distance = round_distance_to_half_meter(distance)
-                points = calculate_jump_points(distance, self.competition_hill.K)
+                distance_points = calculate_jump_points(
+                    distance, self.competition_hill.K
+                )
+
+                # Oceniaj skok przez sędziów
+                judge_scores = self.judge_panel.score_jump(
+                    jumper, distance, self.competition_hill.L, self.competition_hill
+                )
+
+                # Oblicz całkowite punkty (odległość + noty sędziowskie)
+                total_points = distance_points + judge_scores["total_score"]
 
                 # Dodaj wynik kwalifikacji
                 self.qualification_results.append(
-                    {"jumper": jumper, "distance": distance, "points": points}
+                    {
+                        "jumper": jumper,
+                        "distance": distance,
+                        "points": total_points,
+                        "judge_scores": judge_scores,
+                    }
                 )
 
                 # Aktualizuj postęp
@@ -3405,14 +4070,24 @@ class MainWindow(QMainWindow):
         )
 
         # Oblicz punkty za skok using rounded distance
-        points = calculate_jump_points(distance, self.competition_hill.K)
+        distance_points = calculate_jump_points(distance, self.competition_hill.K)
+
+        # Oceniaj skok przez sędziów
+        judge_scores = self.judge_panel.score_jump(
+            jumper, distance, self.competition_hill.L, self.competition_hill
+        )
+
+        # Oblicz całkowite punkty (odległość + noty sędziowskie)
+        total_points = distance_points + judge_scores["total_score"]
 
         if self.current_round == 1:
             res_item["d1"] = distance
-            res_item["p1"] = points
+            res_item["p1"] = total_points
+            res_item["judges1"] = judge_scores
         else:
             res_item["d2"] = distance
-            res_item["p2"] = points
+            res_item["p2"] = total_points
+            res_item["judges2"] = judge_scores
 
         self._update_competition_table()
         self.current_jumper_index += 1
@@ -3465,6 +4140,8 @@ class MainWindow(QMainWindow):
                     "d2": 0.0,
                     "p1": 0.0,
                     "p2": 0.0,
+                    "judges1": None,  # Noty sędziów za pierwszą serię
+                    "judges2": None,  # Noty sędziów za drugą serię
                 }
             )
 
@@ -3823,8 +4500,16 @@ class MainWindow(QMainWindow):
                 ax.set_xlim(final_xlim)
                 ax.set_ylim(final_ylim)
                 self.canvas.draw_idle()
-                if hasattr(self, "zoom_ani"):
-                    self.zoom_ani.event_source.stop()
+                if hasattr(self, "zoom_ani") and self.zoom_ani is not None:
+                    try:
+                        if (
+                            hasattr(self.zoom_ani, "event_source")
+                            and self.zoom_ani.event_source is not None
+                        ):
+                            self.zoom_ani.event_source.stop()
+                    except Exception:
+                        pass
+                    self.zoom_ani = None
                 return
             t = frame / zoom_frames
             new_xlim = (
@@ -3849,6 +4534,236 @@ class MainWindow(QMainWindow):
             repeat=False,
         )
         self.canvas.draw()
+
+    def _create_series_summary_card(
+        self, seria_name, distance, points, difference, k_point, meter_value
+    ):
+        """Tworzy kartę z podsumowaniem dla pojedynczej serii w widoku sumy punktów."""
+        card = QWidget()
+        card.setStyleSheet("""
+            QWidget {
+                background-color: #2a2a2a;
+                border: 1px solid #4a4a4a;
+                border-radius: 8px;
+                padding: 10px;
+                margin: 5px;
+            }
+        """)
+
+        layout = QVBoxLayout(card)
+        layout.setSpacing(5)
+
+        title = QLabel(f"📊 {seria_name}")
+        title.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                font-weight: bold;
+                color: #ffffff;
+                padding: 2px;
+            }
+        """)
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title)
+
+        # Details in a grid-like format
+        details_layout = QFormLayout()
+        details_layout.setContentsMargins(0, 0, 0, 0)
+        details_layout.setSpacing(5)
+
+        # Distance
+        dist_label = QLabel("Odległość:")
+        dist_value = QLabel(format_distance_with_unit(distance))
+        dist_value.setStyleSheet("QLabel { color: #28a745; font-weight: bold; }")
+        details_layout.addRow(dist_label, dist_value)
+
+        # Difference from K-point
+        diff_label = QLabel("Różnica od K-point:")
+        diff_value = QLabel(f"{difference:+.1f} m")
+        diff_value.setStyleSheet("QLabel { color: #0078d4; font-weight: bold; }")
+        details_layout.addRow(diff_label, diff_value)
+
+        # Points for distance
+        dist_points_label = QLabel("Punkty za odległość:")
+        dist_points_value = QLabel(f"{60.0 + (difference * meter_value):.1f} pkt")
+        dist_points_value.setStyleSheet("QLabel { color: #28a745; font-weight: bold; }")
+        details_layout.addRow(dist_points_label, dist_points_value)
+
+        # Total points for series
+        total_series_points_label = QLabel("Suma punktów serii:")
+        total_series_points_value = QLabel(f"{points:.1f} pkt")
+        total_series_points_value.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                font-weight: bold;
+                color: #ffffff;
+                background-color: #059669;
+                border-radius: 4px;
+                padding: 3px;
+            }
+        """)
+        total_series_points_value.setAlignment(Qt.AlignCenter)
+        details_layout.addRow(total_series_points_label, total_series_points_value)
+
+        layout.addLayout(details_layout)
+        self.points_breakdown_layout.addWidget(card)
+
+
+class Judge:
+    """Reprezentuje pojedynczego sędziego"""
+
+    def __init__(self, judge_id: int):
+        self.judge_id = judge_id
+        self.name = f"Sędzia {judge_id}"
+
+    def score_jump(
+        self,
+        jumper: Jumper,
+        distance: float,
+        hill_size: float,
+        telemark_landing: bool = False,
+        hill=None,
+    ) -> float:
+        """
+        Ocenia skok w skali 14-20 punktów.
+
+        Args:
+            jumper: Zawodnik
+            distance: Odległość skoku
+            hill_size: Rozmiar skoczni (HS)
+            telemark_landing: Czy lądowanie telemarkiem
+
+        Returns:
+            Nota sędziego (14.0-20.0)
+        """
+        # Potrzebujemy dostępu do punktu K skoczni
+        if hill is not None:
+            k_point = hill.K
+        else:
+            # Fallback - przybliżenie punktu K jako 90% HS
+            k_point = hill_size * 0.9
+
+        # Określ położenie względem punktów K i HS
+        is_before_k = distance < k_point
+        is_at_or_after_k = distance >= k_point
+        is_before_hs = distance < hill_size
+        is_at_or_after_hs = distance >= hill_size
+
+        if telemark_landing:
+            # Z telemarkiem - interpolacja na podstawie statystyki Telemark
+            telemark_factor = jumper.telemark / 100.0
+
+            # Bazowa ocena zależna od statystyki Telemark
+            # Telemark 0 → 16, Telemark 100 → 17
+            base_score = 16.0 + (telemark_factor * 1.0)
+
+            # Bonus za odległość
+            if is_before_k:
+                # Przed K - bez bonusu
+                final_base = base_score
+            elif is_at_or_after_k and is_before_hs:
+                # Na lub za K, ale przed HS - bonus +1
+                final_base = base_score + 1.0
+            elif is_at_or_after_hs:
+                # Na lub za HS - bonus +2
+                final_base = base_score + 2.0
+            else:
+                final_base = base_score
+
+            # Odchylenie ±1
+            score = random.uniform(final_base - 1.0, final_base + 1.0)
+        else:
+            # Bez telemarku - nie zależy od statystyki Telemark
+            if is_before_k:
+                # Przed K - bazowa ocena 14
+                base_score = 14.0
+            elif is_at_or_after_k and is_before_hs:
+                # Na lub za K, ale przed HS - bonus +1
+                base_score = 15.0
+            elif is_at_or_after_hs:
+                # Na lub za HS - bonus +2
+                base_score = 16.0
+            else:
+                base_score = 14.0
+
+            # Odchylenie ±1
+            score = random.uniform(base_score - 1.0, base_score + 1.0)
+
+        # Ogranicz do zakresu 14-20
+        score = max(14.0, min(20.0, score))
+
+        # Zaokrąglij do 0.5
+        return round(score * 2) / 2
+
+
+class JudgePanel:
+    """Panel 5 sędziów"""
+
+    def __init__(self):
+        self.judges = [Judge(i) for i in range(1, 6)]
+
+    def score_jump(
+        self, jumper: Jumper, distance: float, hill_size: float, hill=None
+    ) -> dict:
+        """
+        Ocenia skok przez wszystkich sędziów.
+
+        Returns:
+            Dict z notami sędziów i podsumowaniem
+        """
+        # Określ czy lądowanie telemarkiem
+        telemark_chance = self._calculate_telemark_chance(jumper, distance, hill_size)
+        telemark_landing = random.random() < telemark_chance
+
+        # Noty wszystkich sędziów
+        judge_scores = []
+        for judge in self.judges:
+            score = judge.score_jump(
+                jumper, distance, hill_size, telemark_landing, hill
+            )
+            judge_scores.append(score)
+
+        # Usuń najwyższą i najniższą notę
+        judge_scores.sort()
+        final_scores = judge_scores[1:-1]  # Usuń pierwszy i ostatni
+
+        # Suma not (bez najwyższej i najniższej)
+        total_judge_score = sum(final_scores)
+
+        return {
+            "all_scores": judge_scores,
+            "final_scores": final_scores,
+            "total_score": total_judge_score,
+            "telemark_landing": telemark_landing,
+            "telemark_chance": telemark_chance,
+        }
+
+    def _calculate_telemark_chance(
+        self, jumper: Jumper, distance: float, hill_size: float
+    ) -> float:
+        """
+        Oblicza szansę na lądowanie telemarkiem.
+
+        Args:
+            jumper: Zawodnik
+            distance: Odległość skoku
+            hill_size: Rozmiar skoczni (HS)
+
+        Returns:
+            Szansa na telemark (0.0-1.0)
+        """
+        # Interpolacja szansy na podstawie telemarku
+        # Telemark 0 → 50% szansy, Telemark 50 → 75% szansy, Telemark 100 → 100% szansy
+        telemark_factor = jumper.telemark / 100.0
+        base_chance = 0.50 + (telemark_factor * 0.50)  # 50% → 100%
+
+        # Jeśli lądowanie za HS, szansa spada z każdym 0.5 metra o 2.5%
+        if distance > hill_size:
+            meters_over_hs = distance - hill_size
+            # Każde 0.5 metra za HS zmniejsza szansę o 2.5%
+            distance_penalty = (meters_over_hs / 0.5) * 0.025
+            base_chance = max(0.0, base_chance - distance_penalty)
+
+        return base_chance
 
 
 if __name__ == "__main__":

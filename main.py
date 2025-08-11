@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
     QStyle,
     QGroupBox,
     QCheckBox,
+    QSizePolicy,
 )
 from PySide6.QtCore import (
     Qt,
@@ -44,7 +45,16 @@ from PySide6.QtCore import (
     QThread,
     Signal as pyqtSignal,
 )
-from PySide6.QtGui import QIcon, QPixmap, QImage, QPainter, QPolygon, QColor, QFont
+from PySide6.QtGui import (
+    QIcon,
+    QPixmap,
+    QImage,
+    QPainter,
+    QPolygon,
+    QColor,
+    QFont,
+    QFontMetrics,
+)
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -57,6 +67,108 @@ from src.hill import Hill
 from src.jumper import Jumper
 from utils.constants import GRAVITY, AIR_DENSITY
 from utils.helpers import gravity_force_parallel, friction_force, drag_force
+
+
+class TimingIndicatorBar(QWidget):
+    """Minimalistyczny pasek wizualizujący timing wybicia.
+
+    Zakres: od -max_abs_seconds (za wcześnie) do +max_abs_seconds (za późno).
+    Marker pokazuje przesunięcie czasu (εt) oraz kolor zależny od klasyfikacji.
+    """
+
+    def __init__(self, parent=None, max_abs_seconds: float = 0.12):
+        super().__init__(parent)
+        self._max_abs_seconds = float(max_abs_seconds)
+        self._epsilon_t_s = 0.0
+        self._classification = "idealny"
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.setMinimumHeight(34)
+
+    def sizeHint(self):  # noqa: N802 - Qt API
+        return QSize(300, 38)
+
+    def setTiming(self, epsilon_t_s: float, classification: str):  # noqa: N802 - Qt API
+        self._epsilon_t_s = float(epsilon_t_s or 0.0)
+        self._classification = str(classification or "idealny")
+        self.update()
+
+    def _interpolate_color(self, c1: QColor, c2: QColor, t: float) -> QColor:
+        t = max(0.0, min(1.0, t))
+        r = int(c1.red() + (c2.red() - c1.red()) * t)
+        g = int(c1.green() + (c2.green() - c1.green()) * t)
+        b = int(c1.blue() + (c2.blue() - c1.blue()) * t)
+        return QColor(r, g, b)
+
+    def _color_for_magnitude(self) -> QColor:
+        """Zwraca kolor wg modułu błędu czasu: zielony→żółty→czerwony.
+
+        0% = zielony (#28a745), ~50% = żółty (#ffc107), 100% = czerwony (#dc3545)
+        """
+        ratio = min(1.0, abs(self._epsilon_t_s) / max(1e-6, self._max_abs_seconds))
+        green = QColor("#28a745")
+        yellow = QColor("#ffc107")
+        red = QColor("#dc3545")
+        if ratio <= 0.5:
+            # 0.0..0.5 → green→yellow
+            return self._interpolate_color(green, yellow, ratio / 0.5)
+        # 0.5..1.0 → yellow→red
+        return self._interpolate_color(yellow, red, (ratio - 0.5) / 0.5)
+
+    def paintEvent(self, event):  # noqa: N802 - Qt API
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+
+        rect = self.rect().adjusted(10, 8, -10, -8)
+
+        # Tło (transparentne, nie rysujemy pełnego panelu żeby było minimalistycznie)
+
+        # Tor paska
+        track_h = 6
+        track_y = rect.center().y() - track_h // 2
+
+        # Rysuj szynę
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(255, 255, 255, 40))
+        painter.drawRoundedRect(rect.left(), track_y, rect.width(), track_h, 3, 3)
+
+        # Znacznik środka (idealny)
+        center_x = rect.left() + rect.width() // 2
+        painter.setPen(QColor(255, 255, 255, 80))
+        painter.drawLine(center_x, track_y - 5, center_x, track_y + track_h + 5)
+
+        # Pozycja markera
+        max_abs = max(0.001, self._max_abs_seconds)
+        ratio = (self._epsilon_t_s / (2 * max_abs)) + 0.5  # map [-max, +max] -> [0,1]
+        ratio = max(0.0, min(1.0, ratio))
+        marker_x = rect.left() + int(ratio * rect.width())
+
+        # Marker (kółko) + subtelna poświata w kolorze zależnym od wielkości błędu
+        color = self._color_for_magnitude()
+        painter.setBrush(QColor(color.red(), color.green(), color.blue(), 220))
+        painter.setPen(Qt.NoPen)
+        radius = 7
+        painter.drawEllipse(QPoint(marker_x, rect.center().y()), radius, radius)
+
+        # Delikatna obwódka
+        painter.setPen(QColor(0, 0, 0, 60))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawEllipse(QPoint(marker_x, rect.center().y()), radius, radius)
+
+        # Podpisy krańcowe subtelne
+        font = painter.font()
+        small_font = QFont(font)
+        small_font.setPointSizeF(max(7.5, font.pointSizeF() - 1))
+        painter.setFont(small_font)
+        painter.setPen(QColor(255, 255, 255, 100))
+        painter.drawText(rect.left(), rect.bottom(), "za wcześnie")
+        metrics_small = QFontMetrics(small_font)
+        painter.drawText(
+            rect.right() - metrics_small.horizontalAdvance("za późno"),
+            rect.bottom(),
+            "za późno",
+        )
+
+        painter.end()
 
 
 def calculate_jump_points(distance: float, k_point: float) -> float:
@@ -1611,6 +1723,7 @@ class MainWindow(QMainWindow):
             ],
             "Wybicie": [
                 "takeoff_force",
+                "timing",
             ],
             "Lot": [
                 "flight_technique",
@@ -1647,6 +1760,7 @@ class MainWindow(QMainWindow):
             "nationality": "Kod kraju (np. POL, GER, NOR). Wpływa na wyświetlaną flagę.",
             "inrun_position": "Pozycja najazdowa skoczka. Wyższe wartości = lepsza aerodynamika = wyższa prędkość na progu.",
             "takeoff_force": "Siła wybicia skoczka. Wyższe wartości = większa siła odbicia = dłuższe skoki. Kluczowy parametr wpływający na parabolę lotu.",
+            "timing": "Timing wybicia. Wyższe wartości = bliżej optimum, lepsze ukierunkowanie impulsu i mniejsza losowość.",
             "flight_technique": "Technika lotu skoczka. Wyższe wartości = lepsze wykorzystanie siły nośnej = dłuższe skoki.",
             "flight_style": "Styl lotu skoczka. Normalny = zrównoważony styl. Agresywny = mniejsza powierzchnia czołowa. Pasywny = większa powierzchnia czołowa.",
             "flight_resistance": "Opór powietrza w locie. Wyższe wartości = mniejszy opór aerodynamiczny = dłuższe skoki.",
@@ -1720,6 +1834,7 @@ class MainWindow(QMainWindow):
                 elif attr in [
                     "inrun_position",
                     "takeoff_force",
+                    "timing",
                     "flight_technique",
                     "flight_resistance",
                     "telemark",
@@ -1785,6 +1900,8 @@ class MainWindow(QMainWindow):
                     label_text = "Pozycja najazdowa:"
                 elif attr == "takeoff_force":
                     label_text = "Siła wybicia:"
+                elif attr == "timing":
+                    label_text = "Timing wybicia:"
                 elif attr == "flight_technique":
                     label_text = "Technika lotu:"
                 elif attr == "flight_style":
@@ -2100,6 +2217,9 @@ class MainWindow(QMainWindow):
                     jump_force = getattr(data_obj, "jump_force", 1500.0)
                     slider_value = jump_force_to_slider(jump_force)
                     widget.setValue(slider_value)
+                elif attr == "timing":
+                    timing_value = getattr(data_obj, "timing", 50)
+                    widget.setValue(int(timing_value))
                 elif attr == "flight_technique":
                     # Konwertuj flight_lift_coefficient na wartość slidera
                     lift_coeff = getattr(data_obj, "flight_lift_coefficient", 0.8)
@@ -2175,6 +2295,9 @@ class MainWindow(QMainWindow):
                     slider_value = widget.value()
                     jump_force = slider_to_jump_force(slider_value)
                     setattr(data_obj, "jump_force", jump_force)
+                elif attr == "timing":
+                    slider_value = widget.value()
+                    setattr(data_obj, "timing", slider_value)
                 elif attr == "flight_technique":
                     # Konwertuj wartość slidera na flight_lift_coefficient
                     slider_value = widget.value()
@@ -2326,7 +2449,7 @@ class MainWindow(QMainWindow):
     def _create_jump_replay_page(self):
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setSpacing(8)
+        layout.setSpacing(6)
         layout.setContentsMargins(15, 8, 15, 15)
 
         layout.addLayout(self._create_top_bar("Powtórka skoku", self.COMPETITION_IDX))
@@ -2334,18 +2457,27 @@ class MainWindow(QMainWindow):
         self.replay_title_label = QLabel("Imię i nazwisko skoczka")
         self.replay_title_label.setObjectName("replayTitleLabel")
         self.replay_title_label.setAlignment(Qt.AlignCenter)
+        # Utrzymaj stałą wysokość niezależnie od rozmiaru okna
+        self.replay_title_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self.replay_title_label.setMaximumHeight(36)
         layout.addWidget(self.replay_title_label)
 
         self.replay_stats_label = QLabel("Statystyki skoku")
         self.replay_stats_label.setObjectName("replayStatsLabel")
         self.replay_stats_label.setAlignment(Qt.AlignCenter)
+        self.replay_stats_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self.replay_stats_label.setMaximumHeight(26)
         layout.addWidget(self.replay_stats_label)
 
         self.replay_figure = Figure(
             facecolor=f"#{self.adjust_brightness('1a1a1a', self.contrast_level)}"
         )
         self.replay_canvas = FigureCanvas(self.replay_figure)
+        self.replay_canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout.addWidget(self.replay_canvas)
+
+        # Placeholder na chip timingu (tworzony dynamicznie w _show_jump_replay)
+        self.replay_timing_chip = None
 
         self.central_widget.addWidget(widget)
 
@@ -2403,11 +2535,15 @@ class MainWindow(QMainWindow):
         self.points_title_label = QLabel("Imię i nazwisko skoczka")
         self.points_title_label.setObjectName("replayTitleLabel")
         self.points_title_label.setAlignment(Qt.AlignCenter)
+        self.points_title_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self.points_title_label.setMaximumHeight(36)
         layout.addWidget(self.points_title_label)
 
         self.points_info_label = QLabel("Informacje o skoku")
         self.points_info_label.setObjectName("replayStatsLabel")
         self.points_info_label.setAlignment(Qt.AlignCenter)
+        self.points_info_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self.points_info_label.setMaximumHeight(26)
         layout.addWidget(self.points_info_label)
 
         # Główny layout z podziałem na dwie kolumny
@@ -2779,12 +2915,18 @@ class MainWindow(QMainWindow):
             try:
                 # Extract distance value from format like "123.5 m"
                 distance = float(distance_str.replace(" m", ""))
+                # Użyj timingu zapisanej serii, jeśli dostępny; w innym razie fallback
+                ti = result_data.get(f"timing{seria_num}") or getattr(
+                    jumper, "last_timing_info", None
+                )
+
                 self._show_jump_replay(
                     jumper,
                     self.competition_hill,
                     self.competition_gate,
                     distance,
                     seria_num,
+                    ti,
                 )
             except (ValueError, TypeError):
                 return
@@ -2858,8 +3000,12 @@ class MainWindow(QMainWindow):
                 jumper, result["distance"], result["points"], "Q", judge_data
             )
 
-    def _show_jump_replay(self, jumper, hill, gate, distance, seria_num):
-        sim_data = self._calculate_trajectory(jumper, hill, gate)
+    def _show_jump_replay(
+        self, jumper, hill, gate, distance, seria_num, timing_info=None
+    ):
+        # Użyj przekazanego timingu (konkretnej serii), a jeśli nie ma – ostatniego dostępnego
+        ti = timing_info or getattr(jumper, "last_timing_info", None)
+        sim_data = self._calculate_trajectory(jumper, hill, gate, ti)
 
         self.replay_title_label.setText(f"{jumper} - Seria {seria_num}")
         stats_text = (
@@ -2876,6 +3022,53 @@ class MainWindow(QMainWindow):
         self._run_animation_on_canvas(
             self.replay_canvas, self.replay_figure, sim_data, hill
         )
+
+        # Minimalistyczny pasek timingu pod statystykami
+        try:
+            parent_layout = self.central_widget.widget(self.JUMP_REPLAY_IDX).layout()
+
+            # Usuń poprzednie wskaźniki (chip lub pasek), jeśli istnieją
+            for attr_name in (
+                "replay_timing_label",
+                "replay_timing_bar",
+                "replay_timing_chip",
+            ):
+                old_widget = getattr(self, attr_name, None)
+                if old_widget is not None:
+                    try:
+                        parent_layout.removeWidget(old_widget)
+                        old_widget.deleteLater()
+                    except Exception:
+                        pass
+                    setattr(self, attr_name, None)
+
+            ti_bar = timing_info or (getattr(jumper, "last_timing_info", None) or {})
+            epsilon_t_s = float(ti_bar.get("epsilon_t_s", 0.0))
+            classification = ti_bar.get("classification", "idealny")
+
+            # Tytuł nad paskiem
+            title_label = QLabel("Timing wybicia")
+            title_label.setAlignment(Qt.AlignCenter)
+            title_label.setStyleSheet(
+                """
+                QLabel {
+                    color: #cccccc;
+                    font-size: 11px;
+                    padding: 0px;
+                    margin: 2px 0 0 0;
+                }
+                """
+            )
+
+            bar = TimingIndicatorBar(max_abs_seconds=0.12)
+            bar.setTiming(epsilon_t_s, classification)
+            # Wstaw pod stats_label: najpierw label (idx 3), potem pasek (idx 4)
+            parent_layout.insertWidget(3, title_label, 0, Qt.AlignCenter)
+            parent_layout.insertWidget(4, bar, 0, Qt.AlignCenter)
+            self.replay_timing_label = title_label
+            self.replay_timing_bar = bar
+        except Exception:
+            pass
 
     def _create_distance_card(
         self, distance, k_point, meter_value, difference, distance_points
@@ -3006,8 +3199,11 @@ class MainWindow(QMainWindow):
 
         self.points_breakdown_layout.addWidget(card)
 
-    def _create_judge_card(self, judge_data):
-        """Tworzy kartę z informacjami o notach sędziowskich."""
+    def _create_judge_card(self, judge_data, title_text: str = "Punkty za noty"):
+        """Tworzy kartę z informacjami o notach sędziowskich.
+
+        title_text: nagłówek karty (np. "Noty sędziów - I seria").
+        """
         card = QWidget()
         card.setStyleSheet("""
             QWidget {
@@ -3023,7 +3219,7 @@ class MainWindow(QMainWindow):
         layout.setSpacing(4)
 
         # Tytuł karty
-        title = QLabel("Punkty za noty")
+        title = QLabel(title_text)
         title.setStyleSheet("""
             QLabel {
                 font-size: 13px;
@@ -3195,6 +3391,75 @@ class MainWindow(QMainWindow):
 
         self.points_breakdown_layout.addWidget(card)
 
+    def _create_series_points_table(
+        self,
+        title_text: str,
+        distance_points: float,
+        judge_points: float,
+        total_points: float,
+    ):
+        """Tworzy zwięzłą tabelę 3-kolumnową dla jednej serii: za odległość, noty sędziowskie, suma."""
+        container = QWidget()
+        vbox = QVBoxLayout(container)
+        vbox.setSpacing(6)
+        vbox.setContentsMargins(0, 0, 0, 0)
+
+        title = QLabel(title_text)
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet(
+            """
+            QLabel {
+                font-size: 13px;
+                font-weight: bold;
+                color: #ffffff;
+                margin: 0px 0px 2px 0px;
+            }
+            """
+        )
+        vbox.addWidget(title)
+
+        table = QTableWidget(1, 3)
+        table.setHorizontalHeaderLabels(["Odległość", "Noty", "Suma"])
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        table.verticalHeader().setVisible(False)
+        table.setEditTriggers(QTableWidget.NoEditTriggers)
+        table.setSelectionMode(QTableWidget.NoSelection)
+        table.setShowGrid(False)
+        table.verticalHeader().setDefaultSectionSize(32)
+        table.setRowHeight(0, 32)
+        table.setStyleSheet(
+            """
+            QTableWidget { background-color: #1f1f1f; border: 1px solid #2a2a2a; }
+            QHeaderView::section { background-color: #242424; color: #cccccc; border: none; padding: 4px 6px; font-size: 12px; }
+            QTableWidget::item { padding: 6px; color: #ffffff; font-size: 14px; }
+            """
+        )
+
+        def mk_item(text: str, color: str):
+            item = QTableWidgetItem(text)
+            item.setTextAlignment(Qt.AlignCenter)
+            item.setForeground(QColor(color))
+            f = item.font()
+            f.setBold(True)
+            item.setFont(f)
+            return item
+
+        # Ustal wysokość tabeli dynamicznie tak, aby treść zawsze była widoczna
+        table.resizeColumnsToContents()
+        table.resizeRowsToContents()
+        header_h = table.horizontalHeader().height()
+        row_h = table.rowHeight(0)
+        frame = table.frameWidth() * 2
+        extra = 28  # margines bezpieczeństwa na padding/styl
+        table.setFixedHeight(header_h + row_h + frame + extra)
+
+        table.setItem(0, 0, mk_item(f"{distance_points:.1f} pkt", "#28a745"))
+        table.setItem(0, 1, mk_item(f"{judge_points:.1f} pkt", "#0078d4"))
+        table.setItem(0, 2, mk_item(f"{total_points:.1f} pkt", "#ffffff"))
+
+        vbox.addWidget(table)
+        self.points_breakdown_layout.addWidget(container)
+
     def _show_points_breakdown(
         self, jumper, distance, points, seria_num, judge_data=None
     ):
@@ -3260,7 +3525,7 @@ class MainWindow(QMainWindow):
         self.central_widget.setCurrentIndex(self.POINTS_BREAKDOWN_IDX)
 
     def _show_total_points_breakdown(self, jumper, result_data, total_points):
-        """Wyświetla szczegółowy podział punktów za obie serie na pełnej stronie z animacją w tle."""
+        """Wyświetla dwie spójne tabele z punktami za I i II serię: za odległość, noty, suma."""
         k_point = self.competition_hill.K
         meter_value = get_meter_value(k_point)
 
@@ -3279,30 +3544,39 @@ class MainWindow(QMainWindow):
             if item.widget():
                 item.widget().deleteLater()
 
-        # Prepare data for both series
-        series_data = []
+        # I seria – prosty, logiczny widok z trzema wartościami
         if result_data.get("d1", 0) > 0 and result_data.get("p1", 0) > 0:
-            d1 = result_data["d1"]
-            p1 = result_data["p1"]
-            diff1 = d1 - k_point
-            series_data.append(("I seria", d1, p1, diff1))
-
-        if result_data.get("d2", 0) > 0 and result_data.get("p2", 0) > 0:
-            d2 = result_data["d2"]
-            p2 = result_data["p2"]
-            diff2 = d2 - k_point
-            series_data.append(("II seria", d2, p2, diff2))
-
-        # Create cards for each series
-        for seria_name, distance, points, difference in series_data:
-            self._create_series_summary_card(
-                seria_name, distance, points, difference, k_point, meter_value
+            d1 = float(result_data["d1"])
+            p1 = float(result_data["p1"])  # suma serii (odległość + noty)
+            distance_points_1 = calculate_jump_points(d1, k_point)
+            judges1 = result_data.get("judges1")
+            judge_points_1 = (
+                float(judges1["total_score"])
+                if judges1
+                else max(0.0, p1 - distance_points_1)
+            )
+            self._create_series_points_table(
+                "I seria", distance_points_1, judge_points_1, p1
             )
 
-        # Add a total card for both series
-        self._create_total_card(
-            total_points, None
-        )  # Pass None for judge_data as it's a total sum
+        # II seria – analogicznie
+        if result_data.get("d2", 0) > 0 and result_data.get("p2", 0) > 0:
+            d2 = float(result_data["d2"])
+            p2 = float(result_data["p2"])  # suma serii
+            distance_points_2 = calculate_jump_points(d2, k_point)
+            judges2 = result_data.get("judges2")
+            judge_points_2 = (
+                float(judges2["total_score"])
+                if judges2
+                else max(0.0, p2 - distance_points_2)
+            )
+            self._create_series_points_table(
+                "II seria", distance_points_2, judge_points_2, p2
+            )
+
+        # Zwięzła karta sumy punktów pozostaje bez zmian, ale mogę ją też
+        # zamienić na trzecią mini-tabelę "Razem" jeśli zechcesz.
+        self._create_total_card(total_points, None)
 
         # Aktualizuj informacje o skoczni
         self.points_hill_name.setText(f"Skocznia: {self.competition_hill}")
@@ -3324,8 +3598,28 @@ class MainWindow(QMainWindow):
         # Przełącz na stronę podziału punktów
         self.central_widget.setCurrentIndex(self.POINTS_BREAKDOWN_IDX)
 
-    def _calculate_trajectory(self, jumper, hill, gate):
-        inrun_velocity = inrun_simulation(hill, jumper, gate_number=gate)
+    def _calculate_trajectory(self, jumper, hill, gate, timing_info=None):
+        """Oblicza trajektorię do wyświetlenia.
+
+        Jeśli podasz `timing_info` (słownik jak w `Jumper.last_timing_info`),
+        zostaną zastosowane te same korekty co w symulacji: wcześniejsze wejście
+        w większe opory (εs) oraz skala impulsu i efektywność pionowa.
+        """
+        early_shift = 0.0
+        magnitude_scale = 1.0
+        vertical_efficiency = 1.0
+        if isinstance(timing_info, dict) and timing_info:
+            try:
+                eps_s = float(timing_info.get("epsilon_s_m", 0.0))
+                early_shift = min(max(0.0, -eps_s), 1.0)
+                magnitude_scale = float(timing_info.get("magnitude_scale", 1.0))
+                vertical_efficiency = float(timing_info.get("vertical_efficiency", 1.0))
+            except Exception:
+                pass
+
+        inrun_velocity = inrun_simulation(
+            hill, jumper, gate_number=gate, early_takeoff_aero_shift_m=early_shift
+        )
 
         base_cl = jumper.flight_lift_coefficient
         effective_cl = base_cl
@@ -3352,9 +3646,12 @@ class MainWindow(QMainWindow):
         initial_velocity_x = initial_total_velocity * math.cos(-hill.alpha_rad)
         initial_velocity_y = initial_total_velocity * math.sin(-hill.alpha_rad)
 
-        velocity_takeoff = (jumper.jump_force * 0.1) / jumper.mass
+        base_delta_v = (jumper.jump_force * 0.1) / jumper.mass
+        velocity_takeoff = base_delta_v * magnitude_scale
         velocity_takeoff_x = velocity_takeoff * math.sin(hill.alpha_rad)
-        velocity_takeoff_y = velocity_takeoff * math.cos(hill.alpha_rad)
+        velocity_takeoff_y = (
+            velocity_takeoff * math.cos(hill.alpha_rad) * vertical_efficiency
+        )
 
         velocity_x_final = initial_velocity_x + velocity_takeoff_x
         velocity_y_final = initial_velocity_y + velocity_takeoff_y
@@ -3427,6 +3724,62 @@ class MainWindow(QMainWindow):
             "max_velocity_kmh": max_velocity * 3.6,
             "avg_velocity_kmh": avg_velocity * 3.6,
         }
+
+    def _create_timing_card(self, timing_info):
+        card = QWidget()
+        card.setStyleSheet(
+            """
+            QWidget {
+                background-color: #1f1f1f;
+                border: 1px solid #444;
+                border-radius: 8px;
+                padding: 10px;
+                margin: 3px;
+            }
+            """
+        )
+        layout = QVBoxLayout(card)
+        title = QLabel("Timing wybicia")
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet(
+            """
+            QLabel {
+                font-size: 13px;
+                font-weight: bold;
+                color: #ffffff;
+            }
+            """
+        )
+        layout.addWidget(title)
+
+        status = (timing_info or {}).get("classification", "idealny")
+        color = {
+            "za wcześnie": "#ffc107",
+            "idealny": "#28a745",
+            "za późno": "#dc3545",
+        }.get(status, "#28a745")
+
+        bar = QWidget()
+        bar.setFixedHeight(12)
+        bar.setStyleSheet(f"background-color: {color}; border-radius: 6px;")
+        layout.addWidget(bar)
+
+        if timing_info:
+            details = QLabel(
+                f"Δt: {timing_info['epsilon_t_s'] * 1000:.0f} ms  |  Δs: {timing_info['epsilon_s_m']:.2f} m"
+            )
+            details.setAlignment(Qt.AlignCenter)
+            details.setStyleSheet(
+                """
+                QLabel {
+                    font-size: 11px;
+                    color: #cccccc;
+                }
+                """
+            )
+            layout.addWidget(details)
+
+        self.points_breakdown_layout.addWidget(card)
 
     def _run_animation_on_canvas(self, canvas, figure, sim_data, hill):
         # Zatrzymaj poprzednią animację jeśli istnieje
@@ -3555,7 +3908,7 @@ class MainWindow(QMainWindow):
                 self.selected_jumper, self.selected_hill, gate
             )
             raw_distance = fly_simulation(
-                self.selected_hill, self.selected_jumper, gate
+                self.selected_hill, self.selected_jumper, gate, perfect_timing=True
             )
             distance = round_distance_to_half_meter(raw_distance)
 
@@ -4084,10 +4437,13 @@ class MainWindow(QMainWindow):
             res_item["d1"] = distance
             res_item["p1"] = total_points
             res_item["judges1"] = judge_scores
+            # Zapisz timing użyty w tej próbie
+            res_item["timing1"] = getattr(jumper, "last_timing_info", None)
         else:
             res_item["d2"] = distance
             res_item["p2"] = total_points
             res_item["judges2"] = judge_scores
+            res_item["timing2"] = getattr(jumper, "last_timing_info", None)
 
         self._update_competition_table()
         self.current_jumper_index += 1

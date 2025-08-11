@@ -29,6 +29,8 @@ class Jumper:
         landing_frontal_area: float = 1,  # Powierzchnia czołowa zawodnika podczas lądowania
         landing_lift_coefficient: float = 0,  # Współczynnik siły nośnej zawodnika podczas lądowania
         telemark: float = 50,  # Umiejętność lądowania telemarkiem (0-100)
+        # --- STATYSTYKI DODATKOWE ---
+        timing: float = 50,  # Precyzja timingu wybicia (0-100)
     ):
         self.name = name
         self.last_name = last_name
@@ -49,6 +51,7 @@ class Jumper:
         self.landing_frontal_area = landing_frontal_area
         self.landing_lift_coefficient = landing_lift_coefficient
         self.telemark = telemark
+        self.timing = timing
 
         # Atrybut dla UI - pozycja najazdowa (0-100)
         self.inrun_position = (
@@ -91,4 +94,5 @@ class Jumper:
             "landing_frontal_area": self.landing_frontal_area,
             "landing_lift_coefficient": self.landing_lift_coefficient,
             "telemark": self.telemark,
+            "timing": self.timing,
         }

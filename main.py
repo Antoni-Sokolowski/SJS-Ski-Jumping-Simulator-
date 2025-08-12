@@ -676,14 +676,24 @@ class CustomProxyStyle(QProxyStyle):
 
 def resource_path(relative_path):
     """
-    Zwraca bezwzględną ścieżkę do zasobu. Niezbędne do poprawnego działania
-    zapakowanej aplikacji (.exe), która przechowuje zasoby w tymczasowym folderze.
+    Zwraca ścieżkę do zasobu, preferując zasoby obok pliku .exe w trybie
+    zapakowanym (onefile). Jeśli nie ma zasobu obok .exe, używa rozpakowanych
+    plików wewnątrz katalogu tymczasowego (_MEIPASS). W trybie uruchamiania ze
+    źródeł zwraca ścieżkę względną do bieżącego katalogu.
     """
     if getattr(sys, "frozen", False):
-        base_path = sys._MEIPASS
-    else:
-        base_path = os.path.abspath(".")
-    return os.path.join(base_path, relative_path)
+        # Preferuj zasoby zewnętrzne obok .exe
+        external_base = os.path.dirname(sys.executable)
+        candidate_external = os.path.join(external_base, relative_path)
+        if os.path.exists(candidate_external):
+            return candidate_external
+
+        # Fallback: zasoby rozpakowane do katalogu tymczasowego przez PyInstaller
+        internal_base = getattr(sys, "_MEIPASS", external_base)
+        return os.path.join(internal_base, relative_path)
+
+    # Uruchamianie ze źródeł
+    return os.path.join(os.path.abspath("."), relative_path)
 
 
 class MainWindow(QMainWindow):

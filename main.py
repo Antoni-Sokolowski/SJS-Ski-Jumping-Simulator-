@@ -45,6 +45,7 @@ from PySide6.QtCore import (
     QThread,
     Signal as pyqtSignal,
 )
+from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest
 from PySide6.QtGui import (
     QIcon,
     QPixmap,
@@ -54,6 +55,7 @@ from PySide6.QtGui import (
     QColor,
     QFont,
     QFontMetrics,
+    QDesktopServices,
 )
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -747,7 +749,8 @@ class MainWindow(QMainWindow):
             self.SETTINGS_IDX,
             self.JUMP_REPLAY_IDX,
             self.POINTS_BREAKDOWN_IDX,
-        ) = range(9)
+            self.SUPPORT_IDX,
+        ) = range(10)
 
         self.current_theme = "dark"
         self.contrast_level = 1.0
@@ -840,6 +843,7 @@ class MainWindow(QMainWindow):
         self._create_settings_page()
         self._create_jump_replay_page()
         self._create_points_breakdown_page()
+        self._create_support_page()
 
         # Map indices to titles
         self.index_to_title = {
@@ -851,6 +855,7 @@ class MainWindow(QMainWindow):
             self.SETTINGS_IDX: "Ustawienia",
             self.JUMP_REPLAY_IDX: "Powtórka skoku",
             self.POINTS_BREAKDOWN_IDX: "Podział punktów",
+            self.SUPPORT_IDX: "Wsparcie",
         }
 
         # Build navigation buttons and wire to pages
@@ -871,12 +876,18 @@ class MainWindow(QMainWindow):
         self._nav_btn_settings = self.nav_sidebar.add_nav(
             "Ustawienia", go(self.SETTINGS_IDX)
         )
+        self._nav_btn_support = self.nav_sidebar.add_nav(
+            "Wsparcie", go(self.SUPPORT_IDX)
+        )
         # Usunięto skrót do punktów z paska bocznego
         self.nav_sidebar.finalize()
 
         # React to page changes: update title and active nav
         self.central_widget.currentChanged.connect(self._on_page_changed)
         self._on_page_changed(self.central_widget.currentIndex())
+
+        # Discord invite for Support page live stats
+        self.discord_invite_code = "D445FhKEmT"
 
     def _create_main_menu(self):
         widget = QWidget()
@@ -954,8 +965,8 @@ class MainWindow(QMainWindow):
     def _create_single_jump_page(self):
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setSpacing(20)
-        layout.setContentsMargins(50, 20, 50, 50)
+        layout.setSpacing(24)
+        layout.setContentsMargins(50, 20, 50, 40)
         layout.addLayout(self._create_top_bar("Symulacja skoku", self.MAIN_MENU_IDX))
 
         # Główny layout z podziałem na sekcje
@@ -2241,6 +2252,219 @@ class MainWindow(QMainWindow):
         layout.addLayout(main_hbox)
 
         self.central_widget.addWidget(widget)
+
+    def _create_support_page(self):
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(12)
+        layout.setContentsMargins(50, 20, 50, 50)
+        layout.addLayout(self._create_top_bar("Wsparcie", self.MAIN_MENU_IDX))
+
+        title = QLabel("Potrzebujesz pomocy?")
+        title.setAlignment(Qt.AlignCenter)
+
+        # Karta zaproszenia w stylu Discord
+        card_btn = QPushButton()
+        card_btn.setCursor(Qt.PointingHandCursor)
+        card_btn.setFlat(True)
+        card_btn.setStyleSheet(
+            "QPushButton{background:#11151d; border:1px solid #232a36; border-radius:12px; padding:0;}"
+            "QPushButton:hover{border-color:#2f3a4d;}"
+        )
+        card_btn.clicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl("https://discord.gg/D445FhKEmT"))
+        )
+
+        card = QWidget(card_btn)
+        card_layout = QVBoxLayout(card)
+        card_layout.setSpacing(12)
+        card_layout.setContentsMargins(16, 16, 16, 16)
+
+        # Pasek z ikoną SJS (wycentrowany) z pliku assets/SJS.ico
+        top_row = QHBoxLayout()
+        top_row.setContentsMargins(0, 0, 0, 0)
+        top_row.setSpacing(12)
+        icon_holder = QWidget()
+        icon_holder.setFixedSize(44, 44)
+        icon_holder.setStyleSheet(
+            "background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #1b2230, stop:1 #0f1115); border-radius: 8px;"
+        )
+        icon_inner = QVBoxLayout(icon_holder)
+        icon_inner.setContentsMargins(6, 6, 6, 6)
+        icon_inner.setSpacing(0)
+        ico_label = QLabel()
+        ico_pix = QPixmap(resource_path(os.path.join("assets", "SJS.ico")))
+        if not ico_pix.isNull():
+            ico_label.setPixmap(
+                ico_pix.scaled(32, 32, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+        ico_label.setAlignment(Qt.AlignCenter)
+        icon_inner.addWidget(ico_label)
+        top_row.addStretch(1)
+        top_row.addWidget(icon_holder, 0, Qt.AlignCenter)
+        top_row.addStretch(1)
+        card_layout.addLayout(top_row)
+
+        name = QLabel("SJS (Ski Jumping Simulator)")
+        name.setStyleSheet("font-weight: 600;")
+        name.setAlignment(Qt.AlignCenter)
+        card_layout.addWidget(name)
+
+        meta = QLabel("• 4 online   • 24 członków\nZał. lip 2025")
+        meta.setStyleSheet("color:#9aa3b5;")
+        card_layout.addWidget(meta)
+
+        open_btn = QPushButton("Przejdź do serwera")
+        open_btn.setProperty("variant", "success")
+        open_btn.setFixedHeight(36)
+        open_btn.clicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl("https://discord.gg/D445FhKEmT"))
+        )
+        card_layout.addWidget(open_btn)
+
+        card_btn.setMinimumWidth(520)
+        card_btn.setMinimumHeight(240)
+        card_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        lay_btn = QVBoxLayout(card_btn)
+        lay_btn.setContentsMargins(0, 0, 0, 0)
+        lay_btn.addWidget(card)
+
+        # Wycentrowanie pionowe: tytuł + kafelek jako jeden blok
+        layout.addStretch(1)
+        center_col = QVBoxLayout()
+        center_col.setSpacing(8)
+        center_col.addWidget(title)
+        center_col.addWidget(card_btn, 0, Qt.AlignHCenter)
+        layout.addLayout(center_col)
+        layout.addStretch(1)
+
+        # Automatyczne odświeżanie liczby członków/online z Discord Invite API
+        self.discord_meta_label = meta
+        # Stan składowy liczb, aby łączyć źródła (Invite -> members, Widget -> online)
+        self._discord_online = None
+        self._discord_members = None
+        if not hasattr(self, "discord_guild_id"):
+            self.discord_guild_id = ""
+        if not hasattr(self, "_discord_nam"):
+            self._discord_nam = QNetworkAccessManager(self)
+        if not hasattr(self, "_discord_timer"):
+            self._discord_timer = QTimer(self)
+            self._discord_timer.setInterval(30000)  # 30s
+            self._discord_timer.timeout.connect(self._refresh_discord_counts)
+            self._discord_timer.start()
+        # pierwsze pobranie
+        self._refresh_discord_counts()
+
+        self.central_widget.addWidget(widget)
+        self.page_support = widget
+
+    def _refresh_discord_counts(self):
+        # Discord Invite API: https://discord.com/api/v10/invites/{code}?with_counts=true
+        code = getattr(self, "discord_invite_code", "")
+        if not code:
+            return
+        url = f"https://discord.com/api/v10/invites/{code}?with_counts=true"
+        try:
+            req = QNetworkRequest(QUrl(url))
+            req.setRawHeader(b"User-Agent", b"SJS/1.0 (Qt)")
+            req.setRawHeader(b"Accept", b"application/json")
+            reply = self._discord_nam.get(req)
+            reply.finished.connect(lambda r=reply: self._on_discord_counts_reply(r))
+        except Exception:
+            pass
+
+        # Równolegle spróbuj z publicznym Widget API dla dokładniejszego online
+        guild_id = getattr(self, "discord_guild_id", "")
+        if guild_id:
+            try:
+                wreq = QNetworkRequest(
+                    QUrl(f"https://discord.com/api/guilds/{guild_id}/widget.json")
+                )
+                wreq.setRawHeader(b"User-Agent", b"SJS/1.0 (Qt)")
+                wreq.setRawHeader(b"Accept", b"application/json")
+                wreply = self._discord_nam.get(wreq)
+                wreply.finished.connect(
+                    lambda r=wreply: self._on_discord_widget_reply(r)
+                )
+            except Exception:
+                pass
+
+    def _on_discord_counts_reply(self, reply):
+        try:
+            if reply.error():
+                # retry szybciej przy błędzie
+                QTimer.singleShot(5000, self._refresh_discord_counts)
+                reply.deleteLater()
+                return
+            data = bytes(reply.readAll()).decode("utf-8", errors="ignore")
+            obj = json.loads(data)
+            # Zapamiętaj guild_id (użyjemy do Widget API)
+            try:
+                guild = obj.get("guild") or {}
+                gid = str(guild.get("id") or "")
+                if gid and not getattr(self, "discord_guild_id", ""):
+                    self.discord_guild_id = gid
+            except Exception:
+                pass
+
+            # Zaktualizuj liczbę członków
+            members_val = obj.get("approximate_member_count") or obj.get("member_count")
+            if isinstance(members_val, (int, float)):
+                self._discord_members = max(0, int(members_val))
+
+            # Zaktualizuj online z Invite (Widget nadpisze, jeśli wróci)
+            presence_val = obj.get("approximate_presence_count") or obj.get(
+                "presence_count"
+            )
+            if isinstance(presence_val, (int, float)):
+                self._discord_online = max(0, int(presence_val))
+
+            self._update_discord_label()
+
+            # Jeśli dopiero poznaliśmy guild_id, spróbuj od razu pobrać Widget
+            gid_now = getattr(self, "discord_guild_id", "")
+            if gid_now:
+                try:
+                    wreq = QNetworkRequest(
+                        QUrl(f"https://discord.com/api/guilds/{gid_now}/widget.json")
+                    )
+                    wreq.setRawHeader(b"User-Agent", b"SJS/1.0 (Qt)")
+                    wreq.setRawHeader(b"Accept", b"application/json")
+                    wreply = self._discord_nam.get(wreq)
+                    wreply.finished.connect(
+                        lambda r=wreply: self._on_discord_widget_reply(r)
+                    )
+                except Exception:
+                    pass
+        except Exception:
+            # nie nadpisuj starych wartości zerami, spróbuj ponownie
+            QTimer.singleShot(10000, self._refresh_discord_counts)
+        finally:
+            reply.deleteLater()
+
+    def _on_discord_widget_reply(self, reply):
+        try:
+            if reply.error():
+                reply.deleteLater()
+                return
+            data = bytes(reply.readAll()).decode("utf-8", errors="ignore")
+            obj = json.loads(data)
+            presence_val = obj.get("presence_count")
+            if isinstance(presence_val, (int, float)):
+                self._discord_online = max(0, int(presence_val))
+            # Widget nie podaje total members — zostaje z Invite
+            self._update_discord_label()
+        except Exception:
+            pass
+        finally:
+            reply.deleteLater()
+
+    def _update_discord_label(self):
+        online = self._discord_online if self._discord_online is not None else "—"
+        members = self._discord_members if self._discord_members is not None else "—"
+        self.discord_meta_label.setText(
+            f"• {online} online   • {members} członków\nZał. lip 2025"
+        )
 
     def _create_description_page(self):
         # Placeholder to zachować kolejność indeksów (bez treści)

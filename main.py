@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QSizePolicy,
     QGridLayout,
+    QProgressBar,
 )
 from PySide6.QtCore import (
     Qt,
@@ -60,7 +61,7 @@ from matplotlib.figure import Figure
 import matplotlib.animation as animation
 import numpy as np
 import math
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 from src.simulation import load_data_from_json, inrun_simulation, fly_simulation
 from src.hill import Hill
 from src.jumper import Jumper
@@ -118,23 +119,24 @@ class TimingIndicatorBar(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
 
-        rect = self.rect().adjusted(10, 8, -10, -8)
+        # Kompaktowe marginesy zgodne z motywem
+        rect = self.rect().adjusted(8, 6, -8, -6)
 
         # Tło (transparentne, nie rysujemy pełnego panelu żeby było minimalistycznie)
 
-        # Tor paska
-        track_h = 6
+        # Tor paska (ciemna szyna zgodna z motywem)
+        track_h = 8
         track_y = rect.center().y() - track_h // 2
 
         # Rysuj szynę
         painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(255, 255, 255, 40))
-        painter.drawRoundedRect(rect.left(), track_y, rect.width(), track_h, 3, 3)
+        painter.setBrush(QColor("#1e2430"))
+        painter.drawRoundedRect(rect.left(), track_y, rect.width(), track_h, 4, 4)
 
         # Znacznik środka (idealny)
         center_x = rect.left() + rect.width() // 2
-        painter.setPen(QColor(255, 255, 255, 80))
-        painter.drawLine(center_x, track_y - 5, center_x, track_y + track_h + 5)
+        painter.setPen(QColor(76, 132, 255, 120))  # akcent motywu
+        painter.drawLine(center_x, track_y - 6, center_x, track_y + track_h + 6)
 
         # Pozycja markera
         max_abs = max(0.001, self._max_abs_seconds)
@@ -142,15 +144,15 @@ class TimingIndicatorBar(QWidget):
         ratio = max(0.0, min(1.0, ratio))
         marker_x = rect.left() + int(ratio * rect.width())
 
-        # Marker (kółko) + subtelna poświata w kolorze zależnym od wielkości błędu
+        # Marker (kółko) w kolorze zależnym od wielkości błędu
         color = self._color_for_magnitude()
-        painter.setBrush(QColor(color.red(), color.green(), color.blue(), 220))
+        painter.setBrush(QColor(color.red(), color.green(), color.blue(), 230))
         painter.setPen(Qt.NoPen)
         radius = 7
         painter.drawEllipse(QPoint(marker_x, rect.center().y()), radius, radius)
 
-        # Delikatna obwódka
-        painter.setPen(QColor(0, 0, 0, 60))
+        # Delikatna obwódka dopasowująca do tła
+        painter.setPen(QColor(15, 17, 21, 180))  # #0f1115 z lekką alfą
         painter.setBrush(Qt.NoBrush)
         painter.drawEllipse(QPoint(marker_x, rect.center().y()), radius, radius)
 
@@ -159,12 +161,13 @@ class TimingIndicatorBar(QWidget):
         small_font = QFont(font)
         small_font.setPointSizeF(max(7.5, font.pointSizeF() - 1))
         painter.setFont(small_font)
-        painter.setPen(QColor(255, 255, 255, 100))
-        painter.drawText(rect.left(), rect.bottom(), "za wcześnie")
+        painter.setPen(QColor(200, 208, 227, 140))
+        # Obniż podpisy o parę pikseli, aby nie nachodziły na pasek
+        painter.drawText(rect.left(), rect.bottom() + 8, "za wcześnie")
         metrics_small = QFontMetrics(small_font)
         painter.drawText(
             rect.right() - metrics_small.horizontalAdvance("za późno"),
-            rect.bottom(),
+            rect.bottom() + 8,
             "za późno",
         )
 
@@ -828,7 +831,7 @@ class MainWindow(QMainWindow):
         self.judge_panel = JudgePanel()
 
         self._create_main_menu()
-        self._create_sim_type_menu()
+        self._create_sim_type_menu()  # placeholder to preserve indices
         self._create_single_jump_page()
         self._create_competition_page()
         self._create_data_editor_page()
@@ -841,7 +844,6 @@ class MainWindow(QMainWindow):
         # Map indices to titles
         self.index_to_title = {
             self.MAIN_MENU_IDX: "Start",
-            self.SIM_TYPE_MENU_IDX: "Wybór trybu",
             self.SINGLE_JUMP_IDX: "Symulacja skoku",
             self.COMPETITION_IDX: "Zawody",
             self.DATA_EDITOR_IDX: "Edytor danych",
@@ -856,9 +858,6 @@ class MainWindow(QMainWindow):
             return lambda: [self.play_sound(), self.central_widget.setCurrentIndex(idx)]
 
         self._nav_btn_start = self.nav_sidebar.add_nav("Start", go(self.MAIN_MENU_IDX))
-        self._nav_btn_modes = self.nav_sidebar.add_nav(
-            "Tryby", go(self.SIM_TYPE_MENU_IDX)
-        )
         self._nav_btn_single = self.nav_sidebar.add_nav(
             "Skok", go(self.SINGLE_JUMP_IDX)
         )
@@ -945,33 +944,11 @@ class MainWindow(QMainWindow):
 
         layout.addStretch(1)
         self.central_widget.addWidget(widget)
+        self.page_main_menu = widget
 
     def _create_sim_type_menu(self):
+        # Nie tworzymy już strony wyboru trybów – utrzymujemy indeksy, dodając pusty widget
         widget = QWidget()
-        layout = QVBoxLayout(widget)
-        layout.setContentsMargins(50, 20, 50, 50)
-        layout.setSpacing(40)
-        layout.addLayout(
-            self._create_top_bar("Wybierz Tryb Symulacji", self.MAIN_MENU_IDX)
-        )
-        layout.addStretch(1)
-        btn_single = QPushButton("Pojedynczy skok")
-        btn_single.clicked.connect(
-            lambda: [
-                self.play_sound(),
-                self.central_widget.setCurrentIndex(self.SINGLE_JUMP_IDX),
-            ]
-        )
-        layout.addWidget(btn_single)
-        btn_comp = QPushButton("Zawody")
-        btn_comp.clicked.connect(
-            lambda: [
-                self.play_sound(),
-                self.central_widget.setCurrentIndex(self.COMPETITION_IDX),
-            ]
-        )
-        layout.addWidget(btn_comp)
-        layout.addStretch(1)
         self.central_widget.addWidget(widget)
 
     def _create_single_jump_page(self):
@@ -979,9 +956,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(widget)
         layout.setSpacing(20)
         layout.setContentsMargins(50, 20, 50, 50)
-        layout.addLayout(
-            self._create_top_bar("Symulacja skoku", self.SIM_TYPE_MENU_IDX)
-        )
+        layout.addLayout(self._create_top_bar("Symulacja skoku", self.MAIN_MENU_IDX))
 
         # Główny layout z podziałem na sekcje
         main_hbox = QHBoxLayout()
@@ -1079,13 +1054,15 @@ class MainWindow(QMainWindow):
 
         layout.addLayout(main_hbox)
         self.central_widget.addWidget(widget)
+        self.page_points = widget
+        self.page_single_jump = widget
 
     def _create_competition_page(self):
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setSpacing(20)
         layout.setContentsMargins(50, 20, 50, 50)
-        layout.addLayout(self._create_top_bar("Zawody", self.SIM_TYPE_MENU_IDX))
+        layout.addLayout(self._create_top_bar("Zawody", self.MAIN_MENU_IDX))
 
         # Główny layout z podziałem na sekcje
         main_hbox = QHBoxLayout()
@@ -1267,15 +1244,13 @@ class MainWindow(QMainWindow):
                 "Suma (pkt)",
             ]
         )
-        self.results_table.verticalHeader().setDefaultSectionSize(45)
+        self.results_table.verticalHeader().setDefaultSectionSize(34)
         self.results_table.verticalHeader().setVisible(False)
         self.results_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.results_table.horizontalHeader().setSectionResizeMode(
             0, QHeaderView.ResizeToContents
         )
-        self.results_table.horizontalHeader().setSectionResizeMode(
-            1, QHeaderView.ResizeToContents
-        )
+        self.results_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Fixed)
         self.results_table.horizontalHeader().setSectionResizeMode(
             2, QHeaderView.Stretch
         )
@@ -1285,6 +1260,10 @@ class MainWindow(QMainWindow):
 
         # Styl tabeli wyników ustalany globalnie przez QSS
         self.results_table.setAlternatingRowColors(True)
+        # Ustal spójny i mniejszy rozmiar ikon (flagi)
+        self.results_table.setIconSize(QSize(24, 16))
+        # Stała, dopasowana szerokość kolumny flagi (więcej luzu)
+        self.results_table.setColumnWidth(1, 42)
 
         # Tabela kwalifikacji - osobna tabela z inną strukturą
         self.qualification_table = QTableWidget()
@@ -1300,7 +1279,7 @@ class MainWindow(QMainWindow):
                 "Punkty",
             ]
         )
-        self.qualification_table.verticalHeader().setDefaultSectionSize(45)
+        self.qualification_table.verticalHeader().setDefaultSectionSize(34)
         self.qualification_table.verticalHeader().setVisible(False)
         self.qualification_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.Stretch
@@ -1309,7 +1288,7 @@ class MainWindow(QMainWindow):
             0, QHeaderView.ResizeToContents
         )
         self.qualification_table.horizontalHeader().setSectionResizeMode(
-            1, QHeaderView.ResizeToContents
+            1, QHeaderView.Fixed
         )
         self.qualification_table.horizontalHeader().setSectionResizeMode(
             2, QHeaderView.Stretch
@@ -1323,6 +1302,10 @@ class MainWindow(QMainWindow):
 
         # Styl tabeli kwalifikacji ustalany globalnie przez QSS
         self.qualification_table.setAlternatingRowColors(True)
+        # Ustal spójny i mniejszy rozmiar ikon (flagi)
+        self.qualification_table.setIconSize(QSize(24, 16))
+        # Stała, dopasowana szerokość kolumny flagi (więcej luzu)
+        self.qualification_table.setColumnWidth(1, 42)
 
         results_panel.addWidget(self.results_table)
         results_panel.addWidget(self.qualification_table)
@@ -1331,6 +1314,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(main_hbox)
         self.competition_page = widget
         self.central_widget.addWidget(widget)
+        self.page_competition = widget
 
     def _create_data_editor_page(self):
         widget = QWidget()
@@ -2262,6 +2246,7 @@ class MainWindow(QMainWindow):
         # Placeholder to zachować kolejność indeksów (bez treści)
         widget = QWidget()
         self.central_widget.addWidget(widget)
+        self.page_description = widget
 
     def _create_settings_page(self):
         # Ustawienia: tryb okna, głośność, kontrast
@@ -2300,6 +2285,7 @@ class MainWindow(QMainWindow):
 
         layout.addStretch()
         self.central_widget.addWidget(widget)
+        self.page_settings = widget
 
     def _change_window_mode(self, mode):
         if mode == "Pełny ekran":
@@ -2330,7 +2316,6 @@ class MainWindow(QMainWindow):
         # Active nav button
         mapping = {
             self.MAIN_MENU_IDX: self._nav_btn_start,
-            self.SIM_TYPE_MENU_IDX: self._nav_btn_modes,
             self.SINGLE_JUMP_IDX: self._nav_btn_single,
             self.COMPETITION_IDX: self._nav_btn_comp,
             self.DATA_EDITOR_IDX: self._nav_btn_editor,
@@ -2344,7 +2329,15 @@ class MainWindow(QMainWindow):
 
     def _create_form_row(self, label_text, widget):
         row = QHBoxLayout()
-        row.addWidget(QLabel(label_text))
+        label = QLabel(label_text)
+        # Stała szerokość etykiet, aby kolumna z polami wyrównywała się
+        label.setFixedWidth(100)
+        row.addWidget(label)
+        # Pola wejściowe mają wypełniać dostępną szerokość i mieć wspólną minimalną szerokość
+        try:
+            widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        except Exception:
+            pass
         row.addWidget(widget)
         return row
 
@@ -2501,6 +2494,10 @@ class MainWindow(QMainWindow):
         result_data = self.competition_results[row]
         jumper = result_data["jumper"]
 
+        # Klik na kolumnę 2 (Zawodnik) – obecnie bez akcji
+        if column == 2:
+            return
+
         # Kolumny z dystansami to 3 (I seria) i 5 (II seria)
         if column in [3, 5]:
             seria_num = 1 if column == 3 else 2
@@ -2569,6 +2566,158 @@ class MainWindow(QMainWindow):
             except (ValueError, TypeError):
                 return
 
+    def _show_jumper_card(self, jumper: "Jumper"):
+        return
+
+        # DEAD CODE BLOCK START (removed feature)
+        card_layout = None
+        card = None
+        # style_meter placeholder removed
+        return
+        # DEAD CODE BLOCK END
+
+        header = QLabel(str(jumper))
+        header.setProperty("chip", True)
+        header.setProperty("variant", "primary")
+        header.setAlignment(Qt.AlignCenter)
+        card_layout.addWidget(header)
+
+        # Flaga i kraj
+        flag_row = QHBoxLayout()
+        flag_row.setSpacing(10)
+        flag_label = QLabel()
+        flag_pix = self._create_rounded_flag_pixmap(
+            jumper.nationality, QSize(48, 32), 6
+        )
+        if not flag_pix.isNull():
+            flag_label.setPixmap(flag_pix)
+        flag_row.addStretch(1)
+        flag_row.addWidget(flag_label)
+        country_label = QLabel(f"Kraj: {jumper.nationality.upper()}")
+        flag_row.addWidget(country_label)
+        flag_row.addStretch(1)
+        card_layout.addLayout(flag_row)
+
+        # Siatka statystyk (czytelnie, bez zbędnych ramek)
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(20)
+        grid.setVerticalSpacing(8)
+
+        def add_stat(row_i: int, label_text: str, value_text: str):
+            lbl = QLabel(label_text)
+            val = QLabel(value_text)
+            f = val.font()
+            f.setBold(True)
+            val.setFont(f)
+            grid.addWidget(lbl, row_i, 0, Qt.AlignRight)
+            grid.addWidget(val, row_i, 1, Qt.AlignLeft)
+
+        add_stat(0, "Wiek:", str(getattr(jumper, "age", "-")))
+        add_stat(1, "Wzrost:", f"{getattr(jumper, 'height', '-')}")
+        add_stat(2, "Waga:", f"{getattr(jumper, 'weight', '-')}")
+        add_stat(3, "Siła wybicia:", f"{getattr(jumper, 'takeoff_force', '-')}")
+        add_stat(4, "Timing:", f"{getattr(jumper, 'timing', '-')}")
+        add_stat(5, "Styl lotu:", f"{getattr(jumper, 'flight_style', '-')}")
+        add_stat(
+            6, "Opór w locie:", f"{getattr(jumper, 'flight_drag_coefficient', '-')}"
+        )
+        add_stat(
+            7, "Powierzchnia czołowa:", f"{getattr(jumper, 'flight_frontal_area', '-')}"
+        )
+        add_stat(8, "Telemark:", f"{getattr(jumper, 'telemark', '-')}")
+
+        card_layout.addLayout(grid)
+
+        # Paski 0-100 jak w edytorze (minimalistyczne, w motywie)
+        meters = QVBoxLayout()
+        meters.setSpacing(10)
+
+        def meter_row(name: str, value_0_100: int) -> QWidget:
+            w = QWidget()
+            h = QHBoxLayout(w)
+            h.setContentsMargins(0, 0, 0, 0)
+            h.setSpacing(10)
+            h.addWidget(QLabel(name))
+            bar = QProgressBar()
+            bar.setRange(0, 100)
+            bar.setValue(max(0, min(100, int(value_0_100))))
+            bar.setTextVisible(False)
+            bar.setFixedHeight(12)
+            bar.setStyleSheet(
+                "QProgressBar{background:#151923;border:1px solid #2a2f3a;border-radius:6px;}"
+                "QProgressBar::chunk{background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #4c84ff, stop:1 #5b90ff);border-radius:6px;}"
+            )
+            h.addWidget(bar, 1)
+            return w
+
+        # Pozycja najazdowa (z inrun_drag_coefficient)
+        inrun_drag = getattr(jumper, "inrun_drag_coefficient", None) or 0.46
+        inrun_pos = drag_coefficient_to_slider(float(inrun_drag))
+
+        takeoff_force_val = getattr(jumper, "takeoff_force", None) or 1500.0
+        takeoff_slider = jump_force_to_slider(float(takeoff_force_val))
+
+        timing_val = int((getattr(jumper, "timing", None) or 50))
+
+        drag_coeff_val = getattr(jumper, "flight_drag_coefficient", None) or 0.5
+        drag_slider = drag_coefficient_flight_to_slider(float(drag_coeff_val))
+
+        lift_coeff_val = getattr(jumper, "flight_lift_coefficient", None) or 0.8
+        technique_slider = lift_coefficient_to_slider(float(lift_coeff_val))
+
+        telemark_val = int((getattr(jumper, "telemark", None) or 50))
+
+        # frontal_area used for style chip only in removed UI
+
+        meters.addWidget(meter_row("Pozycja najazdowa", inrun_pos))
+        meters.addWidget(meter_row("Siła wybicia", takeoff_slider))
+        meters.addWidget(meter_row("Timing wybicia", timing_val))
+        meters.addWidget(meter_row("Technika lotu", technique_slider))
+        meters.addWidget(meter_row("Opór powietrza", drag_slider))
+        meters.addWidget(meter_row("Telemark", telemark_val))
+
+        # Styl lotu – bez paska, elegancki chip
+        style_chip = QLabel(f"Styl lotu: {getattr(jumper, 'flight_style', 'Normalny')}")
+        style_chip.setProperty("chip", True)
+        style_chip.setProperty("variant", "primary")
+        style_chip.setAlignment(Qt.AlignCenter)
+        meters.addWidget(style_chip)
+
+        # OVR – średnia z metryk 0-100
+        ovr = round(
+            (
+                inrun_pos
+                + takeoff_slider
+                + timing_val
+                + technique_slider
+                + drag_slider
+                + telemark_val
+            )
+            / 6
+        )
+        ovr_chip = QLabel(f"OVR {ovr}")
+        ovr_chip.setProperty("chip", True)
+        ovr_chip.setProperty(
+            "variant",
+            "success" if ovr >= 70 else ("warning" if ovr >= 50 else "danger"),
+        )
+        ovr_chip.setAlignment(Qt.AlignCenter)
+        meters.addWidget(ovr_chip)
+
+        card_layout.addLayout(meters)
+
+        # Przycisk powrotu do tabeli (na dole też)
+        back_btn = QPushButton("Wróć do tabeli")
+        back_btn.setProperty("variant", "primary")
+        back_btn.clicked.connect(
+            lambda: self.central_widget.setCurrentIndex(self.COMPETITION_IDX)
+        )
+        card_layout.addWidget(back_btn, 0, Qt.AlignCenter)
+
+        # Dodaj i pokaż stronę
+        self.central_widget.addWidget(card)
+        self.central_widget.setCurrentWidget(card)
+
     def _on_qualification_cell_clicked(self, row, column):
         """Obsługa kliknięcia w komórkę tabeli kwalifikacji"""
         self.play_sound()
@@ -2582,6 +2731,10 @@ class MainWindow(QMainWindow):
                 return
             result = self.qualification_results[row]
         jumper = result["jumper"]
+
+        # Klik na kolumnę 2 (Zawodnik) – obecnie bez akcji
+        if column == 2:
+            return
 
         # Sprawdź czy kliknięto w kolumnę z dystansem (kolumna 3)
         if column == 3 and result.get("distance", 0) > 0:  # Dystans kwalifikacji
@@ -3496,18 +3649,29 @@ class MainWindow(QMainWindow):
         if not os.path.exists(flag_path):
             return QPixmap()
         try:
+            # Wysokiej jakości antyaliasing: rysuj maskę w skali i przeskaluj LANCZOS
+            scale = 4
+            target_w, target_h = size.width(), size.height()
+            hi_w, hi_h = target_w * scale, target_h * scale
             with Image.open(flag_path) as img:
-                img_resized = img.resize(
-                    (size.width(), size.height()), Image.Resampling.LANCZOS
-                ).convert("RGBA")
-            mask = Image.new("L", img_resized.size, 0)
-            draw = ImageDraw.Draw(mask)
-            draw.rounded_rectangle(((0, 0), img_resized.size), radius=radius, fill=255)
-            img_resized.putalpha(mask)
+                img = img.convert("RGBA")
+                img_resized = img.resize((hi_w, hi_h), Image.Resampling.LANCZOS)
+            mask_hi = Image.new("L", (hi_w, hi_h), 0)
+            draw = ImageDraw.Draw(mask_hi)
+            draw.rounded_rectangle(
+                ((0, 0), (hi_w, hi_h)), radius=radius * scale, fill=255
+            )
+            # Minimalne rozmycie krawędzi maski, by usunąć pikselowe rogi
+            mask_hi = mask_hi.filter(ImageFilter.GaussianBlur(radius=scale * 0.35))
+            img_resized.putalpha(mask_hi)
+            # Downscale do docelowego rozmiaru z zachowaniem antyaliasingu
+            final_img = img_resized.resize(
+                (target_w, target_h), Image.Resampling.LANCZOS
+            )
             qimage = QImage(
-                img_resized.tobytes("raw", "RGBA"),
-                img_resized.width,
-                img_resized.height,
+                final_img.tobytes("raw", "RGBA"),
+                final_img.width,
+                final_img.height,
                 QImage.Format_RGBA8888,
             )
             return QPixmap.fromImage(qimage)
@@ -3888,10 +4052,20 @@ class MainWindow(QMainWindow):
             place_item.setData(Qt.UserRole, result)
             self.qualification_table.setItem(row, 0, place_item)
 
-            # Flaga
-            flag_item = QTableWidgetItem()
-            flag_item.setIcon(self.create_rounded_flag_icon(jumper.nationality))
-            self.qualification_table.setItem(row, 1, flag_item)
+            # Flaga — mniejsza, idealnie wycentrowana w kontenerze (tak jak w konkursie)
+            q_flag_pix = self._create_rounded_flag_pixmap(
+                jumper.nationality, size=QSize(24, 16), radius=4
+            )
+            q_flag_container = QWidget()
+            q_flag_layout = QHBoxLayout(q_flag_container)
+            q_flag_layout.setContentsMargins(0, 0, 0, 0)
+            q_flag_layout.setSpacing(0)
+            q_flag_layout.setAlignment(Qt.AlignCenter)
+            q_flag_label = QLabel()
+            if not q_flag_pix.isNull():
+                q_flag_label.setPixmap(q_flag_pix)
+            q_flag_layout.addWidget(q_flag_label, 0, Qt.AlignCenter)
+            self.qualification_table.setCellWidget(row, 1, q_flag_container)
 
             # Zawodnik
             jumper_item = QTableWidgetItem(str(jumper))
@@ -4078,18 +4252,28 @@ class MainWindow(QMainWindow):
             place_item.setTextAlignment(Qt.AlignCenter)
             self.results_table.setItem(i, 0, place_item)
 
-            # Flaga kraju
+            # Flaga kraju – opakowana w bezmarginesowy kontener dla idealnego centrowania
+            flag_pix = self._create_rounded_flag_pixmap(
+                jumper.nationality, size=QSize(24, 16), radius=4
+            )
+            flag_container = QWidget()
+            flag_layout = QHBoxLayout(flag_container)
+            flag_layout.setContentsMargins(0, 0, 0, 0)
+            flag_layout.setSpacing(0)
             flag_label = QLabel()
-            flag_pixmap = self._create_rounded_flag_pixmap(jumper.nationality)
-            if not flag_pixmap.isNull():
-                flag_label.setPixmap(flag_pixmap)
-            flag_label.setScaledContents(True)
+            if not flag_pix.isNull():
+                flag_label.setPixmap(flag_pix)
             flag_label.setAlignment(Qt.AlignCenter)
-            flag_label.setStyleSheet("padding: 4px;")
-            self.results_table.setCellWidget(i, 1, flag_label)
+            flag_layout.addStretch(1)
+            flag_layout.addWidget(flag_label, 0, Qt.AlignCenter)
+            flag_layout.addStretch(1)
+            self.results_table.setCellWidget(i, 1, flag_container)
 
-            # Nazwa zawodnika
+            # Nazwa zawodnika (pogrubiona)
             jumper_item = QTableWidgetItem(str(jumper))
+            f = jumper_item.font()
+            f.setBold(True)
+            jumper_item.setFont(f)
             self.results_table.setItem(i, 2, jumper_item)
 
             # I seria - dystans
@@ -4098,6 +4282,9 @@ class MainWindow(QMainWindow):
                 "d1"
             ] > 0 else d1_item.setText("-")
             d1_item.setTextAlignment(Qt.AlignCenter)
+            f = d1_item.font()
+            f.setBold(True)
+            d1_item.setFont(f)
             self.results_table.setItem(i, 3, d1_item)
 
             # I seria - punkty
@@ -4106,6 +4293,9 @@ class MainWindow(QMainWindow):
                 "-"
             )
             p1_item.setTextAlignment(Qt.AlignCenter)
+            f = p1_item.font()
+            f.setBold(True)
+            p1_item.setFont(f)
             self.results_table.setItem(i, 4, p1_item)
 
             # II seria - dystans
@@ -4114,6 +4304,9 @@ class MainWindow(QMainWindow):
                 "d2"
             ] > 0 else d2_item.setText("-")
             d2_item.setTextAlignment(Qt.AlignCenter)
+            f = d2_item.font()
+            f.setBold(True)
+            d2_item.setFont(f)
             self.results_table.setItem(i, 5, d2_item)
 
             # II seria - punkty
@@ -4122,9 +4315,12 @@ class MainWindow(QMainWindow):
                 "-"
             )
             p2_item.setTextAlignment(Qt.AlignCenter)
+            f = p2_item.font()
+            f.setBold(True)
+            p2_item.setFont(f)
             self.results_table.setItem(i, 6, p2_item)
 
-            # Suma punktów
+            # Suma punktów (pogrubiona)
             total_points = res.get("p1", 0) + res.get("p2", 0)
             total_item = QTableWidgetItem()
             total_item.setText(

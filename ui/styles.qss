@@ -72,6 +72,7 @@ QLabel[class="headerLabel"] {
 }
 
 /* Start page cards */
+/* Card-style buttons (QPushButton) */
 QPushButton[class="cardButton"] {
     background: #11141a;
     border: 1px solid #1e2430;
@@ -79,14 +80,27 @@ QPushButton[class="cardButton"] {
     color: #e8eaf1;
     text-align: left;
     padding: 16px 18px;
+    padding-right: 56px; /* miejsce na ikonę po prawej */
     min-width: 220px;
     min-height: 84px;
     line-height: 1.4;
 }
+
+/* Ikona po prawej stronie karty */
+QPushButton[class="cardButton"]::menu-indicator { width: 0; height: 0; }
+QPushButton[class="cardButton"] {
+    qproperty-iconSize: 24px 24px;
+}
+
+/* Prosty layout: tekst zostaje po lewej, ikonę ustawimy w kodzie przez setStyleSheet marginesy */
+QPushButton[class="cardButton"] > * { margin-right: 0; }
 QPushButton[class="cardButton"]:hover {
     background: #151a23;
     border-color: #2a3550;
 }
+
+/* Card-style widgets (QWidget) to allow custom layouts with right-side icons */
+/* Usuwamy widgetowe karty (wracamy do QPushButton) */
 QPushButton[class="cardButton"]:pressed {
     background: #0f131a;
 }
@@ -268,7 +282,7 @@ QTableView, QTableWidget {
 }
 
 QTableWidget::item, QTableView::item {
-    padding: 6px 8px;
+    padding: 4px 6px; /* kompaktowe wiersze */
 }
 
 /* Lists, dropdowns, and other item views */
@@ -327,12 +341,47 @@ QCheckBox::indicator {
     width: 16px;
     height: 16px;
     border-radius: 4px;
-    border: 1px solid #2a2f3a;
+    border: 1px solid #3a4354; /* subtelne, ale czytelne */
     background: #12151b;
 }
 
 QCheckBox::indicator:checked {
-    background: #4c84ff;
+    background: #12151b; /* bez wypełnienia kolorem, tylko ptaszek */
+    border-color: #3a4354;
+    image: url("assets/checkmark.svg");
+}
+
+QCheckBox::indicator:disabled {
+    background: #0f1115;
+    border-color: #2a2f3a;
+}
+
+/* Minimalne, spójne wskaźniki w widokach list/tabel */
+QAbstractItemView::indicator,
+QListView::indicator,
+QListWidget::indicator,
+QTableView::indicator {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    border: 1px solid #3a4354;
+    background: #12151b;
+}
+
+QAbstractItemView::indicator:checked,
+QListView::indicator:checked,
+QListWidget::indicator:checked,
+QTableView::indicator:checked {
+    background: #12151b; /* bez wypełnienia kolorem, tylko ptaszek */
+    border-color: #3a4354;
+    image: url("assets/checkmark.svg");
+}
+
+QAbstractItemView::indicator:disabled,
+QListView::indicator:disabled,
+QListWidget::indicator:disabled,
+QTableView::indicator:disabled {
+    background: #0f1115;
     border-color: #2a2f3a;
 }
 
@@ -432,15 +481,22 @@ QTableView QScrollBar::handle:vertical,
 QListWidget QScrollBar::handle:vertical,
 QTextEdit QScrollBar::handle:vertical,
 QPlainTextEdit QScrollBar::handle:vertical {
-    background: #4c84ff;
-    min-height: 32px;
-    border-radius: 6px;
+    background: #1f2633;
+    min-height: 28px;
+    border-radius: 6px; /* wyraźnie zaokrąglone */
+    border: none;
+    margin: 2px; /* zaokrąglony, "pill" look */
 }
 QAbstractScrollArea QScrollBar::handle:vertical:hover,
 QTableView QScrollBar::handle:vertical:hover,
 QListWidget QScrollBar::handle:vertical:hover,
 QTextEdit QScrollBar::handle:vertical:hover,
-QPlainTextEdit QScrollBar::handle:vertical:hover { background: #5b90ff; }
+QPlainTextEdit QScrollBar::handle:vertical:hover { background: #273044; }
+QAbstractScrollArea QScrollBar::handle:vertical:pressed,
+QTableView QScrollBar::handle:vertical:pressed,
+QListWidget QScrollBar::handle:vertical:pressed,
+QTextEdit QScrollBar::handle:vertical:pressed,
+QPlainTextEdit QScrollBar::handle:vertical:pressed { background: #36425e; }
 QAbstractScrollArea QScrollBar::add-line:vertical,
 QAbstractScrollArea QScrollBar::sub-line:vertical,
 QTableView QScrollBar::add-line:vertical, QTableView QScrollBar::sub-line:vertical,
@@ -468,15 +524,22 @@ QTableView QScrollBar::handle:horizontal,
 QListWidget QScrollBar::handle:horizontal,
 QTextEdit QScrollBar::handle:horizontal,
 QPlainTextEdit QScrollBar::handle:horizontal {
-    background: #4c84ff;
+    background: #1f2633;
     min-width: 32px;
-    border-radius: 6px;
+    border-radius: 6px; /* wyraźnie zaokrąglone */
+    border: none;
+    margin: 2px; /* zaokrąglony, "pill" look */
 }
 QAbstractScrollArea QScrollBar::handle:horizontal:hover,
 QTableView QScrollBar::handle:horizontal:hover,
 QListWidget QScrollBar::handle:horizontal:hover,
 QTextEdit QScrollBar::handle:horizontal:hover,
-QPlainTextEdit QScrollBar::handle:horizontal:hover { background: #5b90ff; }
+QPlainTextEdit QScrollBar::handle:horizontal:hover { background: #273044; }
+QAbstractScrollArea QScrollBar::handle:horizontal:pressed,
+QTableView QScrollBar::handle:horizontal:pressed,
+QListWidget QScrollBar::handle:horizontal:pressed,
+QTextEdit QScrollBar::handle:horizontal:pressed,
+QPlainTextEdit QScrollBar::handle:horizontal:pressed { background: #36425e; }
 QAbstractScrollArea QScrollBar::add-line:horizontal,
 QAbstractScrollArea QScrollBar::sub-line:horizontal,
 QTableView QScrollBar::add-line:horizontal, QTableView QScrollBar::sub-line:horizontal,

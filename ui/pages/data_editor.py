@@ -107,8 +107,11 @@ def create_data_editor_page(main_window):
     jumper_form_scroll.setWidgetResizable(True)
     main_window.jumper_form_widget = QWidget()
     main_window.jumper_form_widget.setObjectName("editorForm")
+    from src.jumper import Jumper
+    from src.hill import Hill
+    
     main_window.jumper_edit_widgets = main_window._create_editor_form_content(
-        main_window.jumper_form_widget, "Jumper"
+        main_window.jumper_form_widget, Jumper
     )
     jumper_form_scroll.setWidget(main_window.jumper_form_widget)
 
@@ -117,7 +120,7 @@ def create_data_editor_page(main_window):
     main_window.hill_form_widget = QWidget()
     main_window.hill_form_widget.setObjectName("editorForm")
     main_window.hill_edit_widgets = main_window._create_editor_form_content(
-        main_window.hill_form_widget, "Hill"
+        main_window.hill_form_widget, Hill
     )
     hill_form_scroll.setWidget(main_window.hill_form_widget)
 

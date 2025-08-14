@@ -18,6 +18,8 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QFormLayout,
     QLineEdit,
+    QDoubleSpinBox,
+    QSpinBox,
 )
 from PySide6.QtCore import Qt, QUrl, QSize
 from PySide6.QtGui import QIcon, QPixmap, QImage
@@ -1605,14 +1607,83 @@ class MainWindow(QMainWindow):
             return
 
         data_obj = current.data(Qt.UserRole)
-        if isinstance(
-            data_obj, type(self.all_jumpers[0]) if self.all_jumpers else None
-        ):
+        from src.jumper import Jumper
+        from src.hill import Hill
+        
+        if isinstance(data_obj, Jumper):
             self.editor_form_stack.setCurrentIndex(1)
-        elif isinstance(data_obj, type(self.all_hills[0]) if self.all_hills else None):
+            self._fill_editor_form(data_obj, self.jumper_edit_widgets)
+        elif isinstance(data_obj, Hill):
             self.editor_form_stack.setCurrentIndex(2)
+            self._fill_editor_form(data_obj, self.hill_edit_widgets)
         else:
             self.editor_form_stack.setCurrentIndex(0)
+
+    def _fill_editor_form(self, data_obj, widgets):
+        """Fill editor form with data from object."""
+        for attr, widget in widgets.items():
+            if not hasattr(data_obj, attr):
+                continue
+
+            value = getattr(data_obj, attr)
+
+            widget.blockSignals(True)
+            try:
+                if attr == "inrun_position":
+                    # Konwertuj inrun_drag_coefficient na wartość slidera
+                    drag_coeff = getattr(data_obj, "inrun_drag_coefficient", 0.46)
+                    from utils.calculations import drag_coefficient_to_slider
+                    slider_value = drag_coefficient_to_slider(drag_coeff)
+                    widget.setValue(slider_value)
+                elif attr == "takeoff_force":
+                    # Konwertuj jump_force na wartość slidera
+                    jump_force = getattr(data_obj, "jump_force", 1500.0)
+                    from utils.calculations import jump_force_to_slider
+                    slider_value = jump_force_to_slider(jump_force)
+                    widget.setValue(slider_value)
+                elif attr == "timing":
+                    timing_value = getattr(data_obj, "timing", 50)
+                    widget.setValue(int(timing_value))
+                elif attr == "flight_technique":
+                    # Konwertuj flight_lift_coefficient na wartość slidera
+                    lift_coeff = getattr(data_obj, "flight_lift_coefficient", 0.8)
+                    from utils.calculations import lift_coefficient_to_slider
+                    slider_value = lift_coefficient_to_slider(lift_coeff)
+                    widget.setValue(slider_value)
+                elif attr == "flight_style":
+                    # Konwertuj flight_frontal_area na styl
+                    frontal_area = getattr(data_obj, "flight_frontal_area", 0.52)
+                    from utils.calculations import frontal_area_to_style
+                    style = frontal_area_to_style(frontal_area)
+                    widget.setCurrentText(style)
+                elif attr == "flight_resistance":
+                    # Konwertuj flight_drag_coefficient na wartość slidera
+                    drag_coeff = getattr(data_obj, "flight_drag_coefficient", 0.5)
+                    from utils.calculations import drag_coefficient_flight_to_slider
+                    slider_value = drag_coefficient_flight_to_slider(drag_coeff)
+                    widget.setValue(slider_value)
+                elif attr == "telemark":
+                    # Ustaw wartość telemark bezpośrednio (nie fizyczna)
+                    telemark_value = getattr(data_obj, "telemark", 50)
+                    widget.setValue(int(telemark_value))
+                elif attr == "stability":
+                    stability_value = getattr(data_obj, "stability", 50)
+                    widget.setValue(int(stability_value))
+                elif isinstance(widget, QLineEdit):
+                    widget.setText(str(value) if value is not None else "")
+                elif isinstance(widget, (QDoubleSpinBox, QSpinBox)):
+                    if value is None:
+                        widget.setValue(0)
+                    else:
+                        widget.setValue(float(value))
+            except (ValueError, TypeError) as e:
+                print(f"Błąd podczas wypełniania pola dla '{attr}': {e}. Ustawiono wartość domyślną.")
+                if isinstance(widget, QLineEdit):
+                    widget.clear()
+                else:
+                    widget.setValue(0)
+            finally:
+                widget.blockSignals(False)
 
     def _sort_editor_lists(self, sort_text):
         """Sort editor lists."""

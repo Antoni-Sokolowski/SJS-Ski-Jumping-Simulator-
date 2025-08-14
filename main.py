@@ -13,11 +13,9 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QComboBox,
     QSpinBox,
+    QAbstractSpinBox,
     QPushButton,
-    QTextEdit,
     QLabel,
-    QStackedWidget,
-    QSlider,
     QListWidget,
     QListWidgetItem,
     QTableWidget,
@@ -35,6 +33,8 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QCheckBox,
     QSizePolicy,
+    QGridLayout,
+    QProgressBar,
 )
 from PySide6.QtCore import (
     Qt,
@@ -45,6 +45,7 @@ from PySide6.QtCore import (
     QThread,
     Signal as pyqtSignal,
 )
+from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest
 from PySide6.QtGui import (
     QIcon,
     QPixmap,
@@ -54,6 +55,7 @@ from PySide6.QtGui import (
     QColor,
     QFont,
     QFontMetrics,
+    QDesktopServices,
 )
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -61,12 +63,13 @@ from matplotlib.figure import Figure
 import matplotlib.animation as animation
 import numpy as np
 import math
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 from src.simulation import load_data_from_json, inrun_simulation, fly_simulation
 from src.hill import Hill
 from src.jumper import Jumper
-from utils.constants import GRAVITY, AIR_DENSITY
-from utils.helpers import gravity_force_parallel, friction_force, drag_force
+
+# Removed unused physics constants/helpers imports (kept in simulation modules)
+from ui import AnimatedStackedWidget, NavigationSidebar, ModernComboBox, ModernSlider
 
 
 class TimingIndicatorBar(QWidget):
@@ -82,10 +85,10 @@ class TimingIndicatorBar(QWidget):
         self._epsilon_t_s = 0.0
         self._classification = "idealny"
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.setMinimumHeight(34)
+        self.setMinimumHeight(44)
 
     def sizeHint(self):  # noqa: N802 - Qt API
-        return QSize(300, 38)
+        return QSize(300, 48)
 
     def setTiming(self, epsilon_t_s: float, classification: str):  # noqa: N802 - Qt API
         self._epsilon_t_s = float(epsilon_t_s or 0.0)
@@ -118,23 +121,24 @@ class TimingIndicatorBar(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
 
-        rect = self.rect().adjusted(10, 8, -10, -8)
+        # Kompaktowe marginesy zgodne z motywem (większy dolny margines na napisy)
+        rect = self.rect().adjusted(8, 6, -8, -14)
 
         # Tło (transparentne, nie rysujemy pełnego panelu żeby było minimalistycznie)
 
-        # Tor paska
-        track_h = 6
+        # Tor paska (ciemna szyna zgodna z motywem)
+        track_h = 8
         track_y = rect.center().y() - track_h // 2
 
         # Rysuj szynę
         painter.setPen(Qt.NoPen)
-        painter.setBrush(QColor(255, 255, 255, 40))
-        painter.drawRoundedRect(rect.left(), track_y, rect.width(), track_h, 3, 3)
+        painter.setBrush(QColor("#1e2430"))
+        painter.drawRoundedRect(rect.left(), track_y, rect.width(), track_h, 4, 4)
 
         # Znacznik środka (idealny)
         center_x = rect.left() + rect.width() // 2
-        painter.setPen(QColor(255, 255, 255, 80))
-        painter.drawLine(center_x, track_y - 5, center_x, track_y + track_h + 5)
+        painter.setPen(QColor(76, 132, 255, 120))  # akcent motywu
+        painter.drawLine(center_x, track_y - 6, center_x, track_y + track_h + 6)
 
         # Pozycja markera
         max_abs = max(0.001, self._max_abs_seconds)
@@ -142,15 +146,15 @@ class TimingIndicatorBar(QWidget):
         ratio = max(0.0, min(1.0, ratio))
         marker_x = rect.left() + int(ratio * rect.width())
 
-        # Marker (kółko) + subtelna poświata w kolorze zależnym od wielkości błędu
+        # Marker (kółko) w kolorze zależnym od wielkości błędu
         color = self._color_for_magnitude()
-        painter.setBrush(QColor(color.red(), color.green(), color.blue(), 220))
+        painter.setBrush(QColor(color.red(), color.green(), color.blue(), 230))
         painter.setPen(Qt.NoPen)
         radius = 7
         painter.drawEllipse(QPoint(marker_x, rect.center().y()), radius, radius)
 
-        # Delikatna obwódka
-        painter.setPen(QColor(0, 0, 0, 60))
+        # Delikatna obwódka dopasowująca do tła
+        painter.setPen(QColor(15, 17, 21, 180))  # #0f1115 z lekką alfą
         painter.setBrush(Qt.NoBrush)
         painter.drawEllipse(QPoint(marker_x, rect.center().y()), radius, radius)
 
@@ -159,12 +163,14 @@ class TimingIndicatorBar(QWidget):
         small_font = QFont(font)
         small_font.setPointSizeF(max(7.5, font.pointSizeF() - 1))
         painter.setFont(small_font)
-        painter.setPen(QColor(255, 255, 255, 100))
-        painter.drawText(rect.left(), rect.bottom(), "za wcześnie")
+        painter.setPen(QColor(200, 208, 227, 140))
+        # Ustaw podpisy w bezpiecznej strefie wewnątrz widgetu, tuż nad krawędzią
         metrics_small = QFontMetrics(small_font)
+        text_y = self.rect().bottom() - 4
+        painter.drawText(rect.left(), text_y, "za wcześnie")
         painter.drawText(
             rect.right() - metrics_small.horizontalAdvance("za późno"),
-            rect.bottom(),
+            text_y,
             "za późno",
         )
 
@@ -496,9 +502,18 @@ class CustomSpinBox(QSpinBox):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.up_button = QPushButton(self)
         self.down_button = QPushButton(self)
+
+        # Minimal, consistent arrow buttons
+        self.up_button.setObjectName("spinUpButton")
+        self.down_button.setObjectName("spinDownButton")
+        self.up_button.setFlat(True)
+        self.down_button.setFlat(True)
+        self.up_button.setText("▲")
+        self.down_button.setText("▼")
 
         self.up_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.down_button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -507,8 +522,11 @@ class CustomSpinBox(QSpinBox):
         self.down_button.clicked.connect(self.stepDown)
 
     def set_button_icons(self, up_icon, down_icon):
-        self.up_button.setIcon(up_icon)
-        self.down_button.setIcon(down_icon)
+        # Keep textual arrows for crisp, minimal look across DPI settings
+        self.up_button.setIcon(QIcon())
+        self.down_button.setIcon(QIcon())
+        self.up_button.setText("▲")
+        self.down_button.setText("▼")
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -535,9 +553,18 @@ class CustomDoubleSpinBox(QDoubleSpinBox):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.up_button = QPushButton(self)
         self.down_button = QPushButton(self)
+
+        # Minimal, consistent arrow buttons
+        self.up_button.setObjectName("spinUpButton")
+        self.down_button.setObjectName("spinDownButton")
+        self.up_button.setFlat(True)
+        self.down_button.setFlat(True)
+        self.up_button.setText("▲")
+        self.down_button.setText("▼")
 
         self.up_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.down_button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -546,8 +573,11 @@ class CustomDoubleSpinBox(QDoubleSpinBox):
         self.down_button.clicked.connect(self.stepDown)
 
     def set_button_icons(self, up_icon, down_icon):
-        self.up_button.setIcon(up_icon)
-        self.down_button.setIcon(down_icon)
+        # Keep textual arrows for crisp, minimal look across DPI settings
+        self.up_button.setIcon(QIcon())
+        self.down_button.setIcon(QIcon())
+        self.up_button.setText("▲")
+        self.down_button.setText("▼")
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -577,30 +607,38 @@ class CustomSlider(QWidget):
         self.layout.setContentsMargins(0, 0, 0, 0)
 
         # Slider
-        self.slider = QSlider(Qt.Horizontal)
+        self.slider = ModernSlider(Qt.Horizontal)
         self.slider.setRange(0, 100)
+        # Apply slider styles directly
         self.slider.setStyleSheet("""
             QSlider::groove:horizontal {
-                border: 1px solid #555;
                 height: 8px;
-                background: #2b2b2b;
+                background: #1e2430;
                 border-radius: 4px;
-            }
-            QSlider::handle:horizontal {
-                background: #0078d4;
-                border: 2px solid #0078d4;
-                width: 18px;
-                height: 18px;
-                border-radius: 9px;
-                margin: -5px 0;
-            }
-            QSlider::handle:horizontal:hover {
-                background: #106ebe;
-                border-color: #106ebe;
+                border: none;
+                margin: 0;
             }
             QSlider::sub-page:horizontal {
-                background: #0078d4;
+                background: #4c84ff;
                 border-radius: 4px;
+                border: none;
+            }
+            QSlider::add-page:horizontal {
+                background: #2a2f3a;
+                border-radius: 4px;
+                border: none;
+            }
+            QSlider::handle:horizontal {
+                width: 20px;
+                height: 20px;
+                margin: -6px 0;
+                border-radius: 10px;
+                background: #4c84ff;
+                border: 3px solid #0f1115;
+            }
+            QSlider::handle:horizontal:hover {
+                background: #5b90ff;
+                border-color: #1e2430;
             }
         """)
 
@@ -608,18 +646,6 @@ class CustomSlider(QWidget):
         self.value_spinbox = CustomDoubleSpinBox()
         self.value_spinbox.setRange(0.0, 100.0)
         self.value_spinbox.setDecimals(2)
-        self.value_spinbox.setStyleSheet("""
-            QDoubleSpinBox {
-                color: #ffffff;
-                font-size: 14px;
-                font-weight: bold;
-                min-width: 60px;
-                background: #2b2b2b;
-                border: 1px solid #555;
-                border-radius: 4px;
-                padding: 2px;
-            }
-        """)
 
         self.layout.addWidget(self.slider, 1)
         self.layout.addWidget(self.value_spinbox)
@@ -670,7 +696,7 @@ class CustomProxyStyle(QProxyStyle):
             # Fallback dla przypadków gdy argumenty są nieprawidłowych typów
             try:
                 return super().styleHint(hint)
-            except:
+            except Exception:
                 return 0
 
 
@@ -724,7 +750,8 @@ class MainWindow(QMainWindow):
             self.SETTINGS_IDX,
             self.JUMP_REPLAY_IDX,
             self.POINTS_BREAKDOWN_IDX,
-        ) = range(9)
+            self.SUPPORT_IDX,
+        ) = range(10)
 
         self.current_theme = "dark"
         self.contrast_level = 1.0
@@ -735,221 +762,7 @@ class MainWindow(QMainWindow):
         self.up_arrow_icon_light = QIcon(create_arrow_pixmap("up", "#404040"))
         self.down_arrow_icon_light = QIcon(create_arrow_pixmap("down", "#404040"))
 
-        self.themes = {
-            "dark": lambda contrast: f"""
-                QMainWindow, QWidget {{ background-color: #{self.adjust_brightness("1a1a1a", contrast)}; }}
-                QLabel {{ color: #{self.adjust_brightness("ffffff", contrast)}; font-size: 16px; font-family: 'Roboto', 'Segoe UI', Arial, sans-serif; }}
-                QLabel.headerLabel {{ font-size: 32px; font-weight: bold; color: #0078d4; }}
-                QLabel#replayTitleLabel {{ font-size: 24px; font-weight: bold; color: #{self.adjust_brightness("ffffff", contrast)}; }}
-                QLabel#replayStatsLabel {{ font-size: 18px; color: #{self.adjust_brightness("b0b0b0", contrast)}; }}
-                QComboBox, QSpinBox, QTextEdit, QListWidget, QTableWidget, QLineEdit, QDoubleSpinBox, QTabWidget::pane {{
-                    background-color: #{self.adjust_brightness("2a2a2a", contrast)};
-                    color: #{self.adjust_brightness("ffffff", contrast)};
-                    border: 1px solid #{self.adjust_brightness("4a4a4a", contrast)};
-                    padding: 12px; border-radius: 5px; font-size: 16px;
-                }}
-                QToolTip {{
-                    background-color: #{self.adjust_brightness("111111", contrast)};
-                    color: #{self.adjust_brightness("dddddd", contrast)};
-                    border: 1px solid #{self.adjust_brightness("4a4a4a", contrast)};
-                    padding: 8px;
-                    border-radius: 5px;
-                    font-size: 14px;
-                }}
-                QGroupBox {{
-                    font-size: 16px;
-                    font-weight: bold;
-                    color: #{self.adjust_brightness("b0b0b0", contrast)};
-                    border: 1px solid #{self.adjust_brightness("4a4a4a", contrast)};
-                    border-radius: 8px;
-                    margin-top: 10px;
-                }}
-                QGroupBox::title {{
-                    subcontrol-origin: margin;
-                    subcontrol-position: top center;
-                    padding: 0 10px;
-                }}
-                QDoubleSpinBox, QSpinBox {{ padding-right: 25px; }}
-                QDoubleSpinBox::up-button, QSpinBox::up-button, QDoubleSpinBox::down-button, QSpinBox::down-button {{
-                    width: 0px; border: none;
-                }}
-                CustomSpinBox > QPushButton, CustomDoubleSpinBox > QPushButton {{
-                    background-color: transparent; border: none;
-                }}
-                CustomSpinBox > QPushButton:hover, CustomDoubleSpinBox > QPushButton:hover {{
-                    background-color: #{self.adjust_brightness("3f3f3f", contrast)};
-                }}
-
-                QTabWidget::tab-bar {{ alignment: center; }}
-                QTabBar::tab {{
-                    background: #{self.adjust_brightness("2a2a2a", contrast)};
-                    color: #{self.adjust_brightness("b0b0b0", contrast)};
-                    border: 1px solid #{self.adjust_brightness("4a4a4a", contrast)};
-                    border-bottom: none;
-                    padding: 10px 25px;
-                    border-top-left-radius: 5px;
-                    border-top-right-radius: 5px;
-                }}
-                QTabBar::tab:selected {{
-                    background: #{self.adjust_brightness("3a3a3a", contrast)};
-                    color: #{self.adjust_brightness("ffffff", contrast)};
-                }}
-                QComboBox QAbstractItemView {{
-                    background-color: #{self.adjust_brightness("2a2a2a", contrast)};
-                    color: #{self.adjust_brightness("ffffff", contrast)};
-                    border: 1px solid #{self.adjust_brightness("4a4a4a", contrast)};
-                    selection-background-color: #{self.adjust_brightness("005ea6", contrast)};
-                }}
-                QListWidget::item {{ padding: 5px; }}
-                QListWidget::item:hover {{ background-color: #{self.adjust_brightness("3a3a3a", contrast)}; }}
-                QListWidget::item:selected {{ background-color: #{self.adjust_brightness("005ea6", contrast)}; }}
-                QListWidget::indicator {{ width: 18px; height: 18px; border-radius: 4px; }}
-                QListWidget::indicator:unchecked {{ border: 1px solid #777777; background-color: #2a2a2a; }}
-                QListWidget::indicator:checked {{ border: 1px solid #0078d4; background-color: #0078d4; image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iI2ZmZmZmZiIgZD0iTTkgMTYuMTdMNC44MyAxMmwtMS40MSAxLjQxTDkgMTkgMjEgN2wtMS40MS0xLjQxeiIvPjwvc3ZnPg==); }}
-                QTableWidget {{ 
-                    border: 2px solid #{self.adjust_brightness("4a4a4a", contrast)}; 
-                    border-radius: 8px; 
-                    background-color: #{self.adjust_brightness("2a2a2a", contrast)}; 
-                    gridline-color: #{self.adjust_brightness("4a4a4a", contrast)}; 
-                    alternate-background-color: #{self.adjust_brightness("3a3a3a", contrast)}; 
-                }}
-                QTableWidget::item {{ 
-                    padding: 8px; 
-                    border: none; 
-                    background-color: #{self.adjust_brightness("2a2a2a", contrast)}; 
-                    color: #{self.adjust_brightness("ffffff", contrast)}; 
-                }}
-                QTableWidget::item:hover {{ background-color: #{self.adjust_brightness("0078d4", contrast)}; color: white; }}
-                QTableWidget::item:selected {{ background-color: #{self.adjust_brightness("005ea6", contrast)}; color: white; }}
-                QHeaderView::section {{ 
-                    background-color: #{self.adjust_brightness("3a3a3a", contrast)}; 
-                    color: #{self.adjust_brightness("ffffff", contrast)}; 
-                    padding: 10px; 
-                    border: 1px solid #{self.adjust_brightness("4a4a4a", contrast)}; 
-                    font-weight: bold; 
-                }}
-                QHeaderView::section:hover {{ background-color: #{self.adjust_brightness("4a4a4a", contrast)}; }}
-                QPushButton {{ background-color: #{self.adjust_brightness("0078d4", contrast)}; color: #{self.adjust_brightness("ffffff", contrast)}; border: none; padding: 15px; border-radius: 5px; font-size: 20px; font-family: 'Roboto', 'Segoe UI', Arial, sans-serif; }}
-                QPushButton:hover {{ background-color: #{self.adjust_brightness("005ea6", contrast)}; }}
-                QLabel#authorLabel {{ color: #{self.adjust_brightness("b0b0b0", contrast)}; padding: 0 10px 5px 0; }}
-                QPushButton#backArrowButton {{ font-size: 28px; font-weight: bold; color: #{self.adjust_brightness("b0b0b0", contrast)}; background-color: transparent; border: none; padding: 0px; border-radius: 20px; }}
-                QPushButton#backArrowButton:hover {{ background-color: #{self.adjust_brightness("2f2f2f", contrast)}; }}
-                QSlider::groove:horizontal {{ border: 1px solid #{self.adjust_brightness("4a4a4a", contrast)}; height: 8px; background: #{self.adjust_brightness("2a2a2a", contrast)}; margin: 2px 0; border-radius: 4px; }}
-                QSlider::handle:horizontal {{ background: #0078d4; border: 1px solid #0078d4; width: 18px; height: 18px; margin: -5px 0; border-radius: 9px; }}
-                QSlider::sub-page:horizontal {{ background: #{self.adjust_brightness("005ea6", contrast)}; border: 1px solid #{self.adjust_brightness("4a4a4a", contrast)}; height: 8px; border-radius: 4px; }}
-                QScrollBar:vertical {{ border: none; background: #{self.adjust_brightness("2a2a2a", contrast)}; width: 10px; margin: 0; }}
-                QScrollBar::handle:vertical {{ background: #{self.adjust_brightness("555555", contrast)}; min-height: 20px; border-radius: 5px; }}
-                QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; }}
-                QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: none; }}
-                QScrollBar:horizontal {{ border: none; background: #{self.adjust_brightness("2a2a2a", contrast)}; height: 10px; margin: 0; }}
-                QScrollBar::handle:horizontal {{ background: #{self.adjust_brightness("555555", contrast)}; min-width: 20px; border-radius: 5px; }}
-                QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0px; }}
-                QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{ background: none; }}
-            """,
-            "light": lambda contrast: f"""
-                QMainWindow, QWidget {{ background-color: #{self.adjust_brightness("f0f0f0", contrast)}; }}
-                QLabel {{ color: #{self.adjust_brightness("1a1a1a", contrast)}; font-size: 16px; }}
-                QLabel.headerLabel {{ font-size: 32px; font-weight: bold; color: #0078d4; }}
-                QLabel#replayTitleLabel {{ font-size: 24px; font-weight: bold; color: #{self.adjust_brightness("1a1a1a", contrast)}; }}
-                QLabel#replayStatsLabel {{ font-size: 18px; color: #{self.adjust_brightness("404040", contrast)}; }}
-                QComboBox, QSpinBox, QTextEdit, QListWidget, QTableWidget, QLineEdit, QDoubleSpinBox, QTabWidget::pane {{ background-color: #{self.adjust_brightness("ffffff", contrast)}; color: #{self.adjust_brightness("1a1a1a", contrast)}; border: 1px solid #{self.adjust_brightness("d0d0d0", contrast)}; padding: 12px; border-radius: 5px; font-size: 16px; }}
-                QToolTip {{
-                    background-color: #{self.adjust_brightness("ffffff", contrast)};
-                    color: #{self.adjust_brightness("1a1a1a", contrast)};
-                    border: 1px solid #{self.adjust_brightness("c0c0c0", contrast)};
-                    padding: 8px;
-                    border-radius: 5px;
-                    font-size: 14px;
-                }}
-                QGroupBox {{
-                    font-size: 16px;
-                    font-weight: bold;
-                    color: #{self.adjust_brightness("404040", contrast)};
-                    border: 1px solid #{self.adjust_brightness("d0d0d0", contrast)};
-                    border-radius: 8px;
-                    margin-top: 10px;
-                }}
-                QGroupBox::title {{
-                    subcontrol-origin: margin;
-                    subcontrol-position: top center;
-                    padding: 0 10px;
-                }}
-                QDoubleSpinBox, QSpinBox {{ padding-right: 25px; }}
-                QDoubleSpinBox::up-button, QSpinBox::up-button, QDoubleSpinBox::down-button, QSpinBox::down-button {{
-                    width: 0px; border: none;
-                }}
-                CustomSpinBox > QPushButton, CustomDoubleSpinBox > QPushButton {{
-                    background-color: transparent; border: none;
-                }}
-                CustomSpinBox > QPushButton:hover, CustomDoubleSpinBox > QPushButton:hover {{
-                    background-color: #{self.adjust_brightness("e0e0e0", contrast)};
-                }}
-                QTabWidget::tab-bar {{ alignment: center; }}
-                QTabBar::tab {{
-                    background: #{self.adjust_brightness("f0f0f0", contrast)};
-                    color: #{self.adjust_brightness("505050", contrast)};
-                    border: 1px solid #{self.adjust_brightness("d0d0d0", contrast)};
-                    border-bottom: none;
-                    padding: 10px 25px;
-                    border-top-left-radius: 5px;
-                    border-top-right-radius: 5px;
-                }}
-                QTabBar::tab:selected {{
-                    background: #{self.adjust_brightness("ffffff", contrast)};
-                    color: #{self.adjust_brightness("1a1a1a", contrast)};
-                }}
-                QComboBox QAbstractItemView {{
-                    border: 1px solid #{self.adjust_brightness("d0d0d0", contrast)};
-                    selection-background-color: #{self.adjust_brightness("0078d4", contrast)};
-                }}
-                QListWidget::item {{ padding: 5px; }}
-                QListWidget::item:hover {{ background-color: #{self.adjust_brightness("e0e0e0", contrast)}; }}
-                QListWidget::item:selected {{ background-color: #{self.adjust_brightness("0078d4", contrast)}; color: white; }}
-                QListWidget::indicator {{ width: 18px; height: 18px; border-radius: 4px; }}
-                QListWidget::indicator:unchecked {{ border: 1px solid #999999; background-color: #ffffff; }}
-                QListWidget::indicator:checked {{ border: 1px solid #0078d4; background-color: #0078d4; image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iI2ZmZmZmZiIgZD0iTTkgMTYuMTdMNC44MyAxMmwtMS40MSAxLjQxTDkgMTkgMjEgN2wtMS40MS0xLjQxeiIvPjwvc3ZnPg==); }}
-                QTableWidget {{ 
-                    border: 2px solid #{self.adjust_brightness("d0d0d0", contrast)}; 
-                    border-radius: 8px; 
-                    background-color: #{self.adjust_brightness("ffffff", contrast)}; 
-                    gridline-color: #{self.adjust_brightness("d0d0d0", contrast)}; 
-                    alternate-background-color: #{self.adjust_brightness("f8f8f8", contrast)}; 
-                }}
-                QTableWidget::item {{ 
-                    padding: 8px; 
-                    border: none; 
-                    background-color: #{self.adjust_brightness("ffffff", contrast)}; 
-                    color: #{self.adjust_brightness("1a1a1a", contrast)}; 
-                }}
-                QTableWidget::item:hover {{ background-color: #{self.adjust_brightness("d0eaff", contrast)}; color: #{self.adjust_brightness("1a1a1a", contrast)}; }}
-                QTableWidget::item:selected {{ background-color: #{self.adjust_brightness("0078d4", contrast)}; color: white; }}
-                QHeaderView::section {{ 
-                    background-color: #{self.adjust_brightness("e9e9e9", contrast)}; 
-                    color: #{self.adjust_brightness("1a1a1a", contrast)}; 
-                    padding: 10px; 
-                    border: 1px solid #{self.adjust_brightness("d0d0d0", contrast)}; 
-                    font-weight: bold; 
-                }}
-                QHeaderView::section:hover {{ background-color: #{self.adjust_brightness("d0d0d0", contrast)}; }}
-                QPushButton {{ background-color: #{self.adjust_brightness("0078d4", contrast)}; color: #{self.adjust_brightness("ffffff", contrast)}; border: none; padding: 15px; border-radius: 5px; font-size: 20px; }}
-                QPushButton:hover {{ background-color: #{self.adjust_brightness("005ea6", contrast)}; }}
-                QLabel#authorLabel {{ color: #{self.adjust_brightness("404040", contrast)}; padding: 0 10px 5px 0; }}
-                QPushButton#backArrowButton {{ font-size: 28px; font-weight: bold; color: #{self.adjust_brightness("404040", contrast)}; background-color: transparent; border: none; padding: 0px; border-radius: 20px; }}
-                QPushButton#backArrowButton:hover {{ background-color: #{self.adjust_brightness("e0e0e0", contrast)}; }}
-                QSlider::groove:horizontal {{ border: 1px solid #{self.adjust_brightness("d0d0d0", contrast)}; height: 8px; background: #{self.adjust_brightness("e9e9e9", contrast)}; margin: 2px 0; border-radius: 4px; }}
-                QSlider::handle:horizontal {{ background: #0078d4; border: 1px solid #0078d4; width: 18px; height: 18px; margin: -5px 0; border-radius: 9px; }}
-                QSlider::sub-page:horizontal {{ background: #{self.adjust_brightness("005ea6", contrast)}; border: 1px solid #{self.adjust_brightness("d0d0d0", contrast)}; height: 8px; border-radius: 4px; }}
-                QScrollBar:vertical {{ border: none; background: #{self.adjust_brightness("e9e9e9", contrast)}; width: 10px; margin: 0; }}
-                QScrollBar::handle:vertical {{ background: #{self.adjust_brightness("c0c0c0", contrast)}; min-height: 20px; border-radius: 5px; }}
-                QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0px; }}
-                QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: none; }}
-                QScrollBar:horizontal {{ border: none; background: #{self.adjust_brightness("e9e9e9", contrast)}; height: 10px; margin: 0; }}
-                QScrollBar::handle:horizontal {{ background: #{self.adjust_brightness("c0c0c0", contrast)}; min-width: 20px; border-radius: 5px; }}
-                QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0px; }}
-                QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{ background: none; }}
-            """,
-        }
-        self.setStyleSheet(self.themes[self.current_theme](self.contrast_level))
+        # Global QSS is loaded in __main__; remove legacy dynamic themes
 
         self.player = QMediaPlayer()
         self.audio_output = QAudioOutput()
@@ -978,16 +791,33 @@ class MainWindow(QMainWindow):
             self.all_hills.sort(key=lambda hill: str(hill))
 
         main_container = QWidget()
-        main_layout = QVBoxLayout(main_container)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
+        shell_layout = QHBoxLayout(main_container)
+        shell_layout.setContentsMargins(0, 0, 0, 0)
+        shell_layout.setSpacing(0)
 
-        self.central_widget = QStackedWidget()
-        main_layout.addWidget(self.central_widget, 1)
+        # Left navigation sidebar
+        self.nav_sidebar = NavigationSidebar("SJS")
+        shell_layout.addWidget(self.nav_sidebar, 0)
+
+        # Right content column: header + stacked content + footer
+        content_container = QWidget()
+        content_layout = QVBoxLayout(content_container)
+        content_layout.setContentsMargins(20, 16, 20, 16)
+        content_layout.setSpacing(12)
+
+        # Global header title (updates on page change)
+        self.header_title_label = QLabel("Ski Jumping Simulator")
+        self.header_title_label.setProperty("class", "headerLabel")
+        content_layout.addWidget(self.header_title_label, 0, Qt.AlignLeft)
+
+        self.central_widget = AnimatedStackedWidget()
+        content_layout.addWidget(self.central_widget, 1)
 
         self.author_label = QLabel("Antoni Sokołowski")
         self.author_label.setObjectName("authorLabel")
-        main_layout.addWidget(self.author_label, 0, Qt.AlignRight | Qt.AlignBottom)
+        content_layout.addWidget(self.author_label, 0, Qt.AlignRight)
+
+        shell_layout.addWidget(content_container, 1)
         self.setCentralWidget(main_container)
 
         self.selection_order = []
@@ -1005,97 +835,140 @@ class MainWindow(QMainWindow):
         self.judge_panel = JudgePanel()
 
         self._create_main_menu()
-        self._create_sim_type_menu()
+        self._create_sim_type_menu()  # placeholder to preserve indices
         self._create_single_jump_page()
         self._create_competition_page()
         self._create_data_editor_page()
+        # Zachowaj kolejność indeksów: Opis (placeholder), Ustawienia, Powtórka, Punkty
         self._create_description_page()
         self._create_settings_page()
         self._create_jump_replay_page()
         self._create_points_breakdown_page()
+        self._create_support_page()
+
+        # Map indices to titles
+        self.index_to_title = {
+            self.MAIN_MENU_IDX: "Start",
+            self.SINGLE_JUMP_IDX: "Symulacja skoku",
+            self.COMPETITION_IDX: "Zawody",
+            self.DATA_EDITOR_IDX: "Edytor danych",
+            # Opis projektu usunięty, Ustawienia odchudzone
+            self.SETTINGS_IDX: "Ustawienia",
+            self.JUMP_REPLAY_IDX: "Powtórka skoku",
+            self.POINTS_BREAKDOWN_IDX: "Podział punktów",
+            self.SUPPORT_IDX: "Wsparcie",
+        }
+
+        # Build navigation buttons and wire to pages
+        def go(idx: int):
+            return lambda: [self.play_sound(), self.central_widget.setCurrentIndex(idx)]
+
+        self._nav_btn_start = self.nav_sidebar.add_nav("Start", go(self.MAIN_MENU_IDX))
+        self._nav_btn_single = self.nav_sidebar.add_nav(
+            "Skok", go(self.SINGLE_JUMP_IDX)
+        )
+        self._nav_btn_comp = self.nav_sidebar.add_nav(
+            "Zawody", go(self.COMPETITION_IDX)
+        )
+        self._nav_btn_editor = self.nav_sidebar.add_nav(
+            "Edytor", go(self.DATA_EDITOR_IDX)
+        )
+        # Ustawienia w pasku bocznym
+        self._nav_btn_settings = self.nav_sidebar.add_nav(
+            "Ustawienia", go(self.SETTINGS_IDX)
+        )
+        self._nav_btn_support = self.nav_sidebar.add_nav(
+            "Wsparcie", go(self.SUPPORT_IDX)
+        )
+        # Usunięto skrót do punktów z paska bocznego
+        self.nav_sidebar.finalize()
+
+        # React to page changes: update title and active nav
+        self.central_widget.currentChanged.connect(self._on_page_changed)
+        self._on_page_changed(self.central_widget.currentIndex())
+
+        # Discord invite for Support page live stats
+        self.discord_invite_code = "D445FhKEmT"
 
     def _create_main_menu(self):
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setAlignment(Qt.AlignCenter)
-        layout.setSpacing(50)
+        layout.setContentsMargins(50, 30, 50, 50)
+        layout.setSpacing(24)
+
+        # Hero section
+        hero = QVBoxLayout()
+        hero.setSpacing(6)
+
         title = QLabel("Ski Jumping Simulator")
         title.setProperty("class", "headerLabel")
-        layout.addWidget(title)
-        btn_sim = QPushButton("Symulacja")
-        btn_sim.clicked.connect(
-            lambda: [
-                self.play_sound(),
-                self.central_widget.setCurrentIndex(self.SIM_TYPE_MENU_IDX),
-            ]
+        title.setAlignment(Qt.AlignCenter)
+        hero.addWidget(title)
+
+        subtitle = QLabel("Wybierz tryb lub przejdź do edytora danych")
+        subtitle.setProperty("role", "subtitle")
+        subtitle.setAlignment(Qt.AlignCenter)
+        hero.addWidget(subtitle)
+
+        layout.addLayout(hero)
+
+        # Cards grid
+        grid_container = QWidget()
+        grid = QGridLayout(grid_container)
+        grid.setSpacing(16)
+
+        def make_card(text, sub, on_click):
+            btn = QPushButton(f"{text}\n{sub}")
+            btn.setProperty("class", "cardButton")
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.clicked.connect(lambda: [self.play_sound(), on_click()])
+            return btn
+
+        card_single = make_card(
+            "Skok",
+            "Pojedyncza symulacja",
+            lambda: self.central_widget.setCurrentIndex(self.SINGLE_JUMP_IDX),
         )
-        layout.addWidget(btn_sim)
-        btn_editor = QPushButton("Edytor Danych")
-        btn_editor.clicked.connect(
-            lambda: [
-                self.play_sound(),
-                self.central_widget.setCurrentIndex(self.DATA_EDITOR_IDX),
-            ]
+        card_comp = make_card(
+            "Zawody",
+            "Konkurs i kwalifikacje",
+            lambda: self.central_widget.setCurrentIndex(self.COMPETITION_IDX),
         )
-        layout.addWidget(btn_editor)
-        btn_desc = QPushButton("Opis Projektu")
-        btn_desc.clicked.connect(
-            lambda: [
-                self.play_sound(),
-                self.central_widget.setCurrentIndex(self.DESCRIPTION_IDX),
-            ]
+        card_editor = make_card(
+            "Edytor",
+            "Zawodnicy i skocznie",
+            lambda: self.central_widget.setCurrentIndex(self.DATA_EDITOR_IDX),
         )
-        layout.addWidget(btn_desc)
-        btn_settings = QPushButton("Ustawienia")
-        btn_settings.clicked.connect(
-            lambda: [
-                self.play_sound(),
-                self.central_widget.setCurrentIndex(self.SETTINGS_IDX),
-            ]
+        card_settings = make_card(
+            "Ustawienia",
+            "Grafika i dźwięk",
+            lambda: self.central_widget.setCurrentIndex(self.SETTINGS_IDX),
         )
-        layout.addWidget(btn_settings)
-        btn_exit = QPushButton("Wyjdź")
-        btn_exit.clicked.connect(lambda: [self.play_sound(), self.close()])
-        layout.addWidget(btn_exit)
-        layout.addStretch()
+
+        grid.addWidget(card_single, 0, 0)
+        grid.addWidget(card_comp, 0, 1)
+        grid.addWidget(card_editor, 1, 0)
+        grid.addWidget(card_settings, 1, 1)
+
+        layout.addWidget(grid_container)
+
+        # Minimal – bez dodatkowych przycisków i podpowiedzi
+
+        layout.addStretch(1)
         self.central_widget.addWidget(widget)
+        self.page_main_menu = widget
 
     def _create_sim_type_menu(self):
+        # Nie tworzymy już strony wyboru trybów – utrzymujemy indeksy, dodając pusty widget
         widget = QWidget()
-        layout = QVBoxLayout(widget)
-        layout.setContentsMargins(50, 20, 50, 50)
-        layout.setSpacing(40)
-        layout.addLayout(
-            self._create_top_bar("Wybierz Tryb Symulacji", self.MAIN_MENU_IDX)
-        )
-        layout.addStretch(1)
-        btn_single = QPushButton("Pojedynczy skok")
-        btn_single.clicked.connect(
-            lambda: [
-                self.play_sound(),
-                self.central_widget.setCurrentIndex(self.SINGLE_JUMP_IDX),
-            ]
-        )
-        layout.addWidget(btn_single)
-        btn_comp = QPushButton("Zawody")
-        btn_comp.clicked.connect(
-            lambda: [
-                self.play_sound(),
-                self.central_widget.setCurrentIndex(self.COMPETITION_IDX),
-            ]
-        )
-        layout.addWidget(btn_comp)
-        layout.addStretch(1)
         self.central_widget.addWidget(widget)
 
     def _create_single_jump_page(self):
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setSpacing(20)
-        layout.setContentsMargins(50, 20, 50, 50)
-        layout.addLayout(
-            self._create_top_bar("Symulacja skoku", self.SIM_TYPE_MENU_IDX)
-        )
+        layout.setSpacing(24)
+        layout.setContentsMargins(50, 20, 50, 40)
+        layout.addLayout(self._create_top_bar("Symulacja skoku", self.MAIN_MENU_IDX))
 
         # Główny layout z podziałem na sekcje
         main_hbox = QHBoxLayout()
@@ -1110,7 +983,7 @@ class MainWindow(QMainWindow):
         config_group_layout.setSpacing(10)
 
         # Wybór zawodnika
-        self.jumper_combo = QComboBox()
+        self.jumper_combo = ModernComboBox()
         self.jumper_combo.addItem("Wybierz zawodnika")
         for jumper in self.all_jumpers:
             self.jumper_combo.addItem(
@@ -1122,7 +995,7 @@ class MainWindow(QMainWindow):
         )
 
         # Wybór skoczni
-        self.hill_combo = QComboBox()
+        self.hill_combo = ModernComboBox()
         self.hill_combo.addItem("Wybierz skocznię")
         for hill in self.all_hills:
             self.hill_combo.addItem(
@@ -1134,7 +1007,7 @@ class MainWindow(QMainWindow):
         )
 
         # Wybór belki
-        self.gate_spin = QSpinBox()
+        self.gate_spin = CustomSpinBox()
         self.gate_spin.setMinimum(1)
         self.gate_spin.setMaximum(1)
         config_group_layout.addLayout(self._create_form_row("Belka:", self.gate_spin))
@@ -1142,43 +1015,10 @@ class MainWindow(QMainWindow):
         # Przyciski akcji
         btn_layout = QHBoxLayout()
         self.simulate_button = QPushButton("Uruchom symulację")
-        self.simulate_button.setStyleSheet("""
-            QPushButton {
-                background-color: #0078d4;
-                color: white;
-                border: none;
-                padding: 12px 24px;
-                border-radius: 6px;
-                font-weight: bold;
-                font-size: 16px;
-            }
-            QPushButton:hover {
-                background-color: #005ea6;
-            }
-            QPushButton:pressed {
-                background-color: #004578;
-            }
-        """)
+        self.simulate_button.setProperty("variant", "primary")
         self.simulate_button.clicked.connect(self.run_simulation)
 
         self.clear_button = QPushButton("Wyczyść")
-        self.clear_button.setStyleSheet("""
-            QPushButton {
-                background-color: #6c757d;
-                color: white;
-                border: none;
-                padding: 12px 24px;
-                border-radius: 6px;
-                font-weight: bold;
-                font-size: 16px;
-            }
-            QPushButton:hover {
-                background-color: #5a6268;
-            }
-            QPushButton:pressed {
-                background-color: #495057;
-            }
-        """)
         self.clear_button.clicked.connect(self.clear_results)
 
         btn_layout.addWidget(self.simulate_button)
@@ -1196,16 +1036,9 @@ class MainWindow(QMainWindow):
         self.single_jump_stats_label = QLabel(
             "Wybierz zawodnika i skocznię, aby rozpocząć symulację"
         )
-        self.single_jump_stats_label.setStyleSheet("""
-            QLabel {
-                color: #0078d4;
-                font-size: 14px;
-                padding: 15px;
-                background-color: rgba(0, 120, 212, 0.1);
-                border-radius: 8px;
-                border: 2px solid rgba(0, 120, 212, 0.3);
-            }
-        """)
+        self.single_jump_stats_label.setProperty("chip", True)
+        self.single_jump_stats_label.setProperty("variant", "info")
+        self.single_jump_stats_label.setStyleSheet("")
         self.single_jump_stats_label.setWordWrap(True)
         self.single_jump_stats_label.setAlignment(Qt.AlignCenter)
         stats_group_layout.addWidget(self.single_jump_stats_label)
@@ -1222,9 +1055,7 @@ class MainWindow(QMainWindow):
         animation_group = QGroupBox("Animacja trajektorii")
         animation_group_layout = QVBoxLayout(animation_group)
 
-        self.figure = Figure(
-            facecolor=f"#{self.adjust_brightness('1a1a1a', self.contrast_level)}"
-        )
+        self.figure = Figure(facecolor="#0f1115")
         self.canvas = FigureCanvas(self.figure)
         animation_group_layout.addWidget(self.canvas)
 
@@ -1235,13 +1066,15 @@ class MainWindow(QMainWindow):
 
         layout.addLayout(main_hbox)
         self.central_widget.addWidget(widget)
+        self.page_points = widget
+        self.page_single_jump = widget
 
     def _create_competition_page(self):
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setSpacing(20)
         layout.setContentsMargins(50, 20, 50, 50)
-        layout.addLayout(self._create_top_bar("Zawody", self.SIM_TYPE_MENU_IDX))
+        layout.addLayout(self._create_top_bar("Zawody", self.MAIN_MENU_IDX))
 
         # Główny layout z podziałem na sekcje
         main_hbox = QHBoxLayout()
@@ -1258,40 +1091,21 @@ class MainWindow(QMainWindow):
         # Kontrolki wyboru zawodników
         jumper_controls_layout = QHBoxLayout()
         self.toggle_all_button = QPushButton("Zaznacz wszystkich")
-        self.toggle_all_button.setStyleSheet("""
-            QPushButton {
-                background-color: #0078d4;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #005ea6;
-            }
-        """)
+        self.toggle_all_button.setProperty("variant", "primary")
         self.toggle_all_button.clicked.connect(self._toggle_all_jumpers)
         jumper_controls_layout.addWidget(self.toggle_all_button)
 
         # Licznik wybranych zawodników
         self.selected_count_label = QLabel("Wybrano: 0 zawodników")
-        self.selected_count_label.setStyleSheet("""
-            QLabel {
-                color: #0078d4;
-                font-weight: bold;
-                padding: 8px;
-                background-color: rgba(0, 120, 212, 0.1);
-                border-radius: 4px;
-            }
-        """)
+        self.selected_count_label.setProperty("chip", True)
+        self.selected_count_label.setProperty("variant", "info")
         jumper_controls_layout.addWidget(self.selected_count_label)
         jumper_group_layout.addLayout(jumper_controls_layout)
 
         # Sortowanie zawodników
         sort_layout = QHBoxLayout()
         sort_layout.addWidget(QLabel("Sortuj:"))
-        self.sort_combo = QComboBox()
+        self.sort_combo = ModernComboBox()
         self.sort_combo.addItems(["Wg Nazwiska (A-Z)", "Wg Kraju"])
         self.sort_combo.currentTextChanged.connect(self._sort_jumper_list)
         sort_layout.addWidget(self.sort_combo)
@@ -1299,27 +1113,6 @@ class MainWindow(QMainWindow):
 
         # Lista zawodników z lepszym stylem
         self.jumper_list_widget = QListWidget()
-        self.jumper_list_widget.setStyleSheet("""
-            QListWidget {
-                border: 2px solid #4a4a4a;
-                border-radius: 8px;
-                background-color: #2a2a2a;
-                padding: 5px;
-            }
-            QListWidget::item {
-                padding: 8px;
-                margin: 2px;
-                border-radius: 4px;
-                background-color: transparent;
-            }
-            QListWidget::item:hover {
-                background-color: #3a3a3a;
-            }
-            QListWidget::item:selected {
-                background-color: #0078d4;
-                color: white;
-            }
-        """)
         self.jumper_list_widget.setMaximumHeight(300)
 
         for jumper in self.all_jumpers:
@@ -1348,16 +1141,9 @@ class MainWindow(QMainWindow):
         hill_layout = QVBoxLayout()
         hill_layout.setSpacing(5)
         hill_label = QLabel("Skocznia:")
-        hill_label.setStyleSheet("""
-            QLabel {
-                font-weight: bold;
-                color: #ffffff;
-                font-size: 12px;
-            }
-        """)
         hill_layout.addWidget(hill_label)
 
-        self.comp_hill_combo = QComboBox()
+        self.comp_hill_combo = ModernComboBox()
         self.comp_hill_combo.addItem("Wybierz skocznię")
         for hill in self.all_hills:
             self.comp_hill_combo.addItem(
@@ -1371,37 +1157,21 @@ class MainWindow(QMainWindow):
         gate_layout = QVBoxLayout()
         gate_layout.setSpacing(5)
         gate_label = QLabel("Belka:")
-        gate_label.setStyleSheet("""
-            QLabel {
-                font-weight: bold;
-                color: #ffffff;
-                font-size: 12px;
-            }
-        """)
         gate_layout.addWidget(gate_label)
 
         # Kontener dla belki i rekomendacji
         gate_input_layout = QHBoxLayout()
         gate_input_layout.setSpacing(10)
 
-        self.comp_gate_spin = QSpinBox()
+        self.comp_gate_spin = CustomSpinBox()
         self.comp_gate_spin.setMinimum(1)
         self.comp_gate_spin.setMaximum(1)
         gate_input_layout.addWidget(self.comp_gate_spin)
 
         # Label z rekomendowaną belką
         self.recommended_gate_label = QLabel("")
-        self.recommended_gate_label.setStyleSheet("""
-            QLabel {
-                color: #28a745;
-                font-weight: bold;
-                font-size: 12px;
-                padding: 4px 8px;
-                background-color: rgba(40, 167, 69, 0.1);
-                border-radius: 4px;
-                border: 1px solid #28a745;
-            }
-        """)
+        self.recommended_gate_label.setProperty("chip", True)
+        self.recommended_gate_label.setProperty("variant", "primary")
         self.recommended_gate_label.setVisible(False)
         gate_input_layout.addWidget(self.recommended_gate_label)
         gate_input_layout.addStretch()
@@ -1410,14 +1180,8 @@ class MainWindow(QMainWindow):
 
         # Dolny wiersz z informacją o rekomendacji
         self.gate_info_label = QLabel("")
-        self.gate_info_label.setStyleSheet("""
-            QLabel {
-                color: #6c757d;
-                font-size: 11px;
-                font-style: italic;
-                padding: 2px 0px;
-            }
-        """)
+        self.gate_info_label.setProperty("chip", True)
+        self.gate_info_label.setProperty("variant", "info")
         self.gate_info_label.setVisible(False)
         gate_layout.addWidget(self.gate_info_label)
 
@@ -1429,29 +1193,6 @@ class MainWindow(QMainWindow):
         qualification_layout.setSpacing(10)
 
         self.qualification_checkbox = QCheckBox("Kwalifikacje")
-        self.qualification_checkbox.setStyleSheet("""
-            QCheckBox {
-                color: #ffffff;
-                font-weight: bold;
-                font-size: 12px;
-                spacing: 8px;
-            }
-            QCheckBox::indicator {
-                width: 18px;
-                height: 18px;
-                border: 2px solid #4a4a4a;
-                border-radius: 3px;
-                background-color: #2a2a2a;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #0078d4;
-                border-color: #0078d4;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #0078d4;
-                border-color: #0078d4;
-            }
-        """)
         self.qualification_checkbox.setChecked(True)  # Domyślnie włączone
         qualification_layout.addWidget(self.qualification_checkbox)
         qualification_layout.addStretch()
@@ -1460,23 +1201,7 @@ class MainWindow(QMainWindow):
 
         # Przycisk rozpoczęcia zawodów z lepszym stylem
         self.run_comp_btn = QPushButton("Rozpocznij zawody")
-        self.run_comp_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #28a745;
-                color: white;
-                border: none;
-                padding: 12px 24px;
-                border-radius: 6px;
-                font-size: 16px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #218838;
-            }
-            QPushButton:pressed {
-                background-color: #1e7e34;
-            }
-        """)
+        self.run_comp_btn.setProperty("variant", "success")
         self.run_comp_btn.clicked.connect(self._on_competition_button_clicked)
         competition_group_layout.addWidget(self.run_comp_btn)
 
@@ -1492,20 +1217,13 @@ class MainWindow(QMainWindow):
         self.competition_status_label = QLabel(
             "Tabela wyników (kliknij odległość, aby zobaczyć powtórkę):"
         )
+        self.competition_status_label.setProperty("chip", True)
+        self.competition_status_label.setProperty("variant", "info")
 
         # Dodajemy informację o aktualnej serii
         self.round_info_label = QLabel("Seria: 1/2")
-        self.round_info_label.setStyleSheet("""
-            QLabel {
-                color: #ffc107;
-                font-weight: bold;
-                font-size: 12px;
-                padding: 5px 10px;
-                background-color: rgba(255, 193, 7, 0.1);
-                border-radius: 4px;
-                border: 1px solid #ffc107;
-            }
-        """)
+        self.round_info_label.setProperty("chip", True)
+        self.round_info_label.setProperty("variant", "primary")
         self.round_info_label.setAlignment(Qt.AlignCenter)
 
         # Layout dla statusu i informacji o serii
@@ -1516,17 +1234,8 @@ class MainWindow(QMainWindow):
 
         # Dodajemy pasek postępu
         self.progress_label = QLabel("Postęp: 0%")
-        self.progress_label.setStyleSheet("""
-            QLabel {
-                color: #28a745;
-                font-weight: bold;
-                font-size: 12px;
-                padding: 5px 10px;
-                background-color: rgba(40, 167, 69, 0.1);
-                border-radius: 4px;
-                border: 1px solid #28a745;
-            }
-        """)
+        self.progress_label.setProperty("chip", True)
+        self.progress_label.setProperty("variant", "primary")
         self.progress_label.setAlignment(Qt.AlignCenter)
         results_panel.addWidget(self.progress_label)
 
@@ -1547,15 +1256,13 @@ class MainWindow(QMainWindow):
                 "Suma (pkt)",
             ]
         )
-        self.results_table.verticalHeader().setDefaultSectionSize(45)
+        self.results_table.verticalHeader().setDefaultSectionSize(34)
         self.results_table.verticalHeader().setVisible(False)
         self.results_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.results_table.horizontalHeader().setSectionResizeMode(
             0, QHeaderView.ResizeToContents
         )
-        self.results_table.horizontalHeader().setSectionResizeMode(
-            1, QHeaderView.ResizeToContents
-        )
+        self.results_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Fixed)
         self.results_table.horizontalHeader().setSectionResizeMode(
             2, QHeaderView.Stretch
         )
@@ -1563,8 +1270,12 @@ class MainWindow(QMainWindow):
         self.results_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.results_table.cellClicked.connect(self._on_result_cell_clicked)
 
-        # Styl tabeli wyników - będzie aktualizowany w update_styles()
-        self.results_table.setStyleSheet("")
+        # Styl tabeli wyników ustalany globalnie przez QSS
+        self.results_table.setAlternatingRowColors(True)
+        # Ustal spójny i mniejszy rozmiar ikon (flagi)
+        self.results_table.setIconSize(QSize(24, 16))
+        # Stała, dopasowana szerokość kolumny flagi (więcej luzu)
+        self.results_table.setColumnWidth(1, 42)
 
         # Tabela kwalifikacji - osobna tabela z inną strukturą
         self.qualification_table = QTableWidget()
@@ -1580,7 +1291,7 @@ class MainWindow(QMainWindow):
                 "Punkty",
             ]
         )
-        self.qualification_table.verticalHeader().setDefaultSectionSize(45)
+        self.qualification_table.verticalHeader().setDefaultSectionSize(34)
         self.qualification_table.verticalHeader().setVisible(False)
         self.qualification_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.Stretch
@@ -1589,7 +1300,7 @@ class MainWindow(QMainWindow):
             0, QHeaderView.ResizeToContents
         )
         self.qualification_table.horizontalHeader().setSectionResizeMode(
-            1, QHeaderView.ResizeToContents
+            1, QHeaderView.Fixed
         )
         self.qualification_table.horizontalHeader().setSectionResizeMode(
             2, QHeaderView.Stretch
@@ -1601,8 +1312,12 @@ class MainWindow(QMainWindow):
         )
         self.qualification_table.setVisible(False)  # Domyślnie ukryta
 
-        # Styl tabeli kwalifikacji - będzie aktualizowany w update_styles()
-        self.qualification_table.setStyleSheet("")
+        # Styl tabeli kwalifikacji ustalany globalnie przez QSS
+        self.qualification_table.setAlternatingRowColors(True)
+        # Ustal spójny i mniejszy rozmiar ikon (flagi)
+        self.qualification_table.setIconSize(QSize(24, 16))
+        # Stała, dopasowana szerokość kolumny flagi (więcej luzu)
+        self.qualification_table.setColumnWidth(1, 42)
 
         results_panel.addWidget(self.results_table)
         results_panel.addWidget(self.qualification_table)
@@ -1611,6 +1326,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(main_hbox)
         self.competition_page = widget
         self.central_widget.addWidget(widget)
+        self.page_competition = widget
 
     def _create_data_editor_page(self):
         widget = QWidget()
@@ -1628,7 +1344,7 @@ class MainWindow(QMainWindow):
 
         editor_sort_layout = QHBoxLayout()
         editor_sort_layout.addWidget(QLabel("Sortuj:"))
-        self.editor_sort_combo = QComboBox()
+        self.editor_sort_combo = ModernComboBox()
         self.editor_sort_combo.addItems(["Alfabetycznie (A-Z)", "Wg Kraju (A-Z)"])
         editor_sort_layout.addWidget(self.editor_sort_combo)
         left_panel.addLayout(editor_sort_layout)
@@ -1691,6 +1407,8 @@ class MainWindow(QMainWindow):
         jumper_form_scroll = QScrollArea()
         jumper_form_scroll.setWidgetResizable(True)
         self.jumper_form_widget = QWidget()
+        self.jumper_form_widget.setObjectName("editorForm")
+        self.jumper_form_widget.setObjectName("editorForm")
         self.jumper_edit_widgets = self._create_editor_form_content(
             self.jumper_form_widget, Jumper
         )
@@ -1699,12 +1417,14 @@ class MainWindow(QMainWindow):
         hill_form_scroll = QScrollArea()
         hill_form_scroll.setWidgetResizable(True)
         self.hill_form_widget = QWidget()
+        self.hill_form_widget.setObjectName("editorForm")
+        self.hill_form_widget.setObjectName("editorForm")
         self.hill_edit_widgets = self._create_editor_form_content(
             self.hill_form_widget, Hill
         )
         hill_form_scroll.setWidget(self.hill_form_widget)
 
-        self.editor_form_stack = QStackedWidget()
+        self.editor_form_stack = AnimatedStackedWidget()
         self.editor_form_stack.addWidget(self.editor_placeholder_label)
         self.editor_form_stack.addWidget(jumper_form_scroll)
         self.editor_form_stack.addWidget(hill_form_scroll)
@@ -1742,6 +1462,7 @@ class MainWindow(QMainWindow):
             ],
             "Lądowanie": [
                 "telemark",
+                "stability",
             ],
         }
         hill_groups = {
@@ -1775,6 +1496,7 @@ class MainWindow(QMainWindow):
             "flight_style": "Styl lotu skoczka. Normalny = zrównoważony styl. Agresywny = mniejsza powierzchnia czołowa. Pasywny = większa powierzchnia czołowa.",
             "flight_resistance": "Opór powietrza w locie. Wyższe wartości = mniejszy opór aerodynamiczny = dłuższe skoki.",
             "telemark": "Umiejętność lądowania telemarkiem. Wyższe wartości = częstsze i ładniejsze lądowania telemarkiem.",
+            "stability": "Stabilność lądowania. Zmniejsza ryzyko podpórki i upadku daleko za HS.",
             "landing_drag_coefficient": "Opór aerodynamiczny podczas lądowania (bardzo wysoki).",
             "landing_frontal_area": "Powierzchnia czołowa podczas lądowania (największa).",
             "landing_lift_coefficient": "Siła nośna podczas lądowania (zazwyczaj 0).",
@@ -1848,43 +1570,17 @@ class MainWindow(QMainWindow):
                     "flight_technique",
                     "flight_resistance",
                     "telemark",
+                    "stability",
                 ]:
                     widget = CustomSlider()
                     widget.setRange(0, 100)
                 elif attr == "flight_style":
-                    widget = QComboBox()
+                    widget = ModernComboBox()
                     widget.addItems(["Normalny", "Agresywny", "Pasywny"])
                     # Ustawienie odpowiedniego rozmiaru dla dropdowna
                     widget.setFixedHeight(
                         35
                     )  # Większa wysokość aby tekst był w pełni widoczny
-                    widget.setStyleSheet("""
-                        QComboBox {
-                            padding: 4px;
-                            border: 1px solid #555;
-                            border-radius: 4px;
-                            background: #2b2b2b;
-                            color: #ffffff;
-                            font-size: 14px;
-                        }
-                        QComboBox::drop-down {
-                            border: none;
-                            width: 20px;
-                        }
-                        QComboBox::down-arrow {
-                            image: none;
-                            border-left: 5px solid transparent;
-                            border-right: 5px solid transparent;
-                            border-top: 5px solid #ffffff;
-                            margin-right: 5px;
-                        }
-                        QComboBox QAbstractItemView {
-                            background: #2b2b2b;
-                            color: #ffffff;
-                            border: 1px solid #555;
-                            selection-background-color: #0078d4;
-                        }
-                    """)
                 elif "deg" in attr:
                     widget = CustomDoubleSpinBox()
                     widget.setRange(-10000.0, 10000.0)
@@ -1918,6 +1614,8 @@ class MainWindow(QMainWindow):
                     label_text = "Styl lotu:"
                 elif attr == "flight_resistance":
                     label_text = "Opór powietrza:"
+                elif attr == "stability":
+                    label_text = "Stabilność:"
                 else:
                     label_text = (
                         attr.replace("_", " ").replace("deg", "(deg)").capitalize()
@@ -2249,6 +1947,9 @@ class MainWindow(QMainWindow):
                     # Ustaw wartość telemark bezpośrednio (nie fizyczna)
                     telemark_value = getattr(data_obj, "telemark", 50)
                     widget.setValue(int(telemark_value))
+                elif attr == "stability":
+                    stability_value = getattr(data_obj, "stability", 50)
+                    widget.setValue(int(stability_value))
 
                 elif isinstance(widget, QLineEdit):
                     widget.setText(str(value) if value is not None else "")
@@ -2340,6 +2041,10 @@ class MainWindow(QMainWindow):
                     # Zapisz wartość telemark bezpośrednio (nie fizyczna)
                     slider_value = widget.value()
                     setattr(data_obj, "telemark", slider_value)
+                elif attr == "stability":
+                    # Zapisz wartość stabilności bezpośrednio (nie fizyczna)
+                    slider_value = widget.value()
+                    setattr(data_obj, "stability", slider_value)
 
                 elif isinstance(widget, QLineEdit):
                     new_value = widget.text()
@@ -2465,6 +2170,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(self._create_top_bar("Powtórka skoku", self.COMPETITION_IDX))
 
         self.replay_title_label = QLabel("Imię i nazwisko skoczka")
+        self.replay_title_label.setProperty("role", "title")
         self.replay_title_label.setObjectName("replayTitleLabel")
         self.replay_title_label.setAlignment(Qt.AlignCenter)
         # Utrzymaj stałą wysokość niezależnie od rozmiaru okna
@@ -2473,15 +2179,14 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.replay_title_label)
 
         self.replay_stats_label = QLabel("Statystyki skoku")
+        self.replay_stats_label.setProperty("role", "subtitle")
         self.replay_stats_label.setObjectName("replayStatsLabel")
         self.replay_stats_label.setAlignment(Qt.AlignCenter)
         self.replay_stats_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         self.replay_stats_label.setMaximumHeight(26)
         layout.addWidget(self.replay_stats_label)
 
-        self.replay_figure = Figure(
-            facecolor=f"#{self.adjust_brightness('1a1a1a', self.contrast_level)}"
-        )
+        self.replay_figure = Figure(facecolor="#0f1115")
         self.replay_canvas = FigureCanvas(self.replay_figure)
         self.replay_canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout.addWidget(self.replay_canvas)
@@ -2501,48 +2206,19 @@ class MainWindow(QMainWindow):
 
         # Hill information at the top
         self.points_hill_info_group = QGroupBox("Informacje o skoczni")
-        self.points_hill_info_group.setStyleSheet("""
-            QGroupBox {
-                font-weight: bold;
-                color: #ffffff;
-                border: 2px solid #4a4a4a;
-                border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px 0 5px;
-            }
-        """)
         hill_info_layout = QVBoxLayout(self.points_hill_info_group)
 
         self.points_hill_name = QLabel()
-        self.points_hill_name.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                color: #ffffff;
-                padding: 5px;
-                font-weight: bold;
-            }
-        """)
         hill_info_layout.addWidget(self.points_hill_name)
 
         self.points_gate_info = QLabel()
-        self.points_gate_info.setStyleSheet("""
-            QLabel {
-                font-size: 12px;
-                color: #cccccc;
-                padding: 5px;
-            }
-        """)
         hill_info_layout.addWidget(self.points_gate_info)
 
         layout.addWidget(self.points_hill_info_group)
 
         # Tytuł z informacjami o zawodniku
         self.points_title_label = QLabel("Imię i nazwisko skoczka")
+        self.points_title_label.setProperty("role", "title")
         self.points_title_label.setObjectName("replayTitleLabel")
         self.points_title_label.setAlignment(Qt.AlignCenter)
         self.points_title_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
@@ -2550,6 +2226,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.points_title_label)
 
         self.points_info_label = QLabel("Informacje o skoku")
+        self.points_info_label.setProperty("role", "subtitle")
         self.points_info_label.setObjectName("replayStatsLabel")
         self.points_info_label.setAlignment(Qt.AlignCenter)
         self.points_info_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
@@ -2580,9 +2257,7 @@ class MainWindow(QMainWindow):
         # Prawa kolumna - Animacja trajektorii w tle
         animation_panel = QVBoxLayout()
 
-        self.points_figure = Figure(
-            facecolor=f"#{self.adjust_brightness('1a1a1a', self.contrast_level)}"
-        )
+        self.points_figure = Figure(facecolor="#0f1115")
         self.points_canvas = FigureCanvas(self.points_figure)
         animation_panel.addWidget(self.points_canvas)
 
@@ -2591,37 +2266,112 @@ class MainWindow(QMainWindow):
 
         self.central_widget.addWidget(widget)
 
-    def _create_description_page(self):
+    def _create_support_page(self):
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setSpacing(40)
+        layout.setSpacing(12)
         layout.setContentsMargins(50, 20, 50, 50)
-        layout.addLayout(self._create_top_bar("Opis Projektu", self.MAIN_MENU_IDX))
-        desc_text = QTextEdit()
-        desc_text.setReadOnly(True)
-        desc_text.setText("Tutaj pojawi się opis projektu.")
-        layout.addWidget(desc_text)
-        layout.addStretch()
+        layout.addLayout(self._create_top_bar("Wsparcie", self.MAIN_MENU_IDX))
+
+        title = QLabel("Potrzebujesz pomocy?")
+        title.setStyleSheet("font-size: 24px; font-weight: 600;")
+        title.setAlignment(Qt.AlignCenter)
+
+        # Karta zaproszenia w stylu Discord
+        card_btn = QPushButton()
+        card_btn.setCursor(Qt.PointingHandCursor)
+        card_btn.setFlat(True)
+        card_btn.setStyleSheet(
+            "QPushButton{background:#11151d; border:1px solid #232a36; border-radius:12px; padding:0;}"
+            "QPushButton:hover{border-color:#2f3a4d;}"
+        )
+        card_btn.clicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl("https://discord.gg/D445FhKEmT"))
+        )
+
+        card = QWidget(card_btn)
+        card_layout = QVBoxLayout(card)
+        card_layout.setSpacing(12)
+        card_layout.setContentsMargins(16, 16, 16, 16)
+
+        # Pasek z ikoną SJS (wycentrowany) z pliku assets/SJS.ico
+        top_row = QHBoxLayout()
+        top_row.setContentsMargins(0, 0, 0, 0)
+        top_row.setSpacing(12)
+        icon_holder = QWidget()
+        icon_holder.setFixedSize(60, 60)
+        icon_holder.setStyleSheet(
+            "background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #1b2230, stop:1 #0f1115); border-radius: 12px;"
+        )
+        icon_inner = QVBoxLayout(icon_holder)
+        icon_inner.setContentsMargins(8, 8, 8, 8)
+        icon_inner.setSpacing(0)
+        ico_label = QLabel()
+        ico_pix = QPixmap(resource_path(os.path.join("assets", "SJS.ico")))
+        if not ico_pix.isNull():
+            ico_label.setPixmap(
+                ico_pix.scaled(44, 44, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+        ico_label.setAlignment(Qt.AlignCenter)
+        icon_inner.addWidget(ico_label)
+        top_row.addStretch(1)
+        top_row.addWidget(icon_holder, 0, Qt.AlignCenter)
+        top_row.addStretch(1)
+        card_layout.addLayout(top_row)
+
+        name = QLabel("SJS (Ski Jumping Simulator)")
+        name.setStyleSheet("font-size: 18px; font-weight: 600;")
+        name.setAlignment(Qt.AlignCenter)
+        card_layout.addWidget(name)
+
+        open_btn = QPushButton("Przejdź do serwera")
+        open_btn.setProperty("variant", "success")
+        open_btn.setStyleSheet("font-size: 16px; font-weight: 600;")
+        open_btn.setFixedHeight(48)
+        open_btn.clicked.connect(
+            lambda: QDesktopServices.openUrl(QUrl("https://discord.gg/D445FhKEmT"))
+        )
+        card_layout.addWidget(open_btn)
+
+        card_btn.setMinimumWidth(600)
+        card_btn.setMinimumHeight(300)
+        card_btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        lay_btn = QVBoxLayout(card_btn)
+        lay_btn.setContentsMargins(0, 0, 0, 0)
+        lay_btn.addWidget(card)
+
+        # Wycentrowanie pionowe i horyzontalne: tytuł + kafelek jako jeden blok
+        layout.addStretch(1)
+        center_widget = QWidget()
+        center_layout = QVBoxLayout(center_widget)
+        center_layout.setSpacing(16)
+        center_layout.addWidget(title, 0, Qt.AlignHCenter)
+        center_layout.addWidget(card_btn, 0, Qt.AlignHCenter)
+        layout.addWidget(center_widget, 0, Qt.AlignCenter)
+        layout.addStretch(1)
+
+        # Usunięto automatyczne odświeżanie - kafelek bez liczb członków/online
+
         self.central_widget.addWidget(widget)
+        self.page_support = widget
+
+    # Usunięto metody Discord API - nie są już potrzebne
+
+    def _create_description_page(self):
+        # Placeholder to zachować kolejność indeksów (bez treści)
+        widget = QWidget()
+        self.central_widget.addWidget(widget)
+        self.page_description = widget
 
     def _create_settings_page(self):
+        # Ustawienia: tryb okna, głośność, kontrast
         widget = QWidget()
         layout = QVBoxLayout(widget)
         layout.setSpacing(40)
         layout.setContentsMargins(50, 20, 50, 50)
         layout.addLayout(self._create_top_bar("Ustawienia", self.MAIN_MENU_IDX))
 
-        self.theme_combo = QComboBox()
-        self.theme_combo.addItems(
-            [
-                "Ciemny",
-                "Jasny",
-            ]
-        )
-        self.theme_combo.currentTextChanged.connect(self.change_theme)
-        layout.addLayout(self._create_form_row("Motyw:", self.theme_combo))
-
-        self.window_mode_combo = QComboBox()
+        self.window_mode_combo = ModernComboBox()
         self.window_mode_combo.addItems(
             ["W oknie", "Pełny ekran w oknie", "Pełny ekran"]
         )
@@ -2629,25 +2379,28 @@ class MainWindow(QMainWindow):
         self.window_mode_combo.currentTextChanged.connect(self._change_window_mode)
         layout.addLayout(self._create_form_row("Tryb okna:", self.window_mode_combo))
 
+        volume_label = QLabel("Głośność:")
+        self.volume_slider = ModernSlider(Qt.Horizontal)
+        self.volume_slider.setRange(0, 100)
+        self.volume_slider.setValue(int(self.volume_level * 100))
+        self.volume_slider.valueChanged.connect(self.change_volume)
+        # Usuń style QSS per-widget – wygląd zapewnia ModernSlider.paintEvent
+        self.volume_slider.setStyleSheet("")
+        layout.addLayout(self._create_form_row(volume_label.text(), self.volume_slider))
+
         contrast_label = QLabel("Kontrast:")
-        self.contrast_slider = QSlider(Qt.Horizontal)
-        self.contrast_slider.setRange(50, 150)
-        self.contrast_slider.setValue(100)
+        self.contrast_slider = ModernSlider(Qt.Horizontal)
+        self.contrast_slider.setRange(50, 150)  # 0.50x – 1.50x
+        self.contrast_slider.setValue(int(self.contrast_level * 100))
         self.contrast_slider.valueChanged.connect(self.change_contrast)
-        self.contrast_slider.sliderReleased.connect(self.update_styles)
+        self.contrast_slider.setStyleSheet("")
         layout.addLayout(
             self._create_form_row(contrast_label.text(), self.contrast_slider)
         )
 
-        volume_label = QLabel("Głośność:")
-        self.volume_slider = QSlider(Qt.Horizontal)
-        self.volume_slider.setRange(0, 100)
-        self.volume_slider.setValue(int(self.volume_level * 100))
-        self.volume_slider.valueChanged.connect(self.change_volume)
-        layout.addLayout(self._create_form_row(volume_label.text(), self.volume_slider))
-
         layout.addStretch()
         self.central_widget.addWidget(widget)
+        self.page_settings = widget
 
     def _change_window_mode(self, mode):
         if mode == "Pełny ekran":
@@ -2658,26 +2411,48 @@ class MainWindow(QMainWindow):
             self.showNormal()
 
     def _create_top_bar(self, title_text, back_index):
+        # With global header + nav, top bar reduces to optional back button row
         top_bar = QHBoxLayout()
-        btn = QPushButton("←")
-        btn.clicked.connect(
+        back_btn = QPushButton("← Wróć")
+        back_btn.clicked.connect(
             lambda: [self.play_sound(), self.central_widget.setCurrentIndex(back_index)]
         )
-        btn.setFixedSize(40, 40)
-        btn.setObjectName("backArrowButton")
-        top_bar.addWidget(btn, 0, Qt.AlignLeft)
-        lbl = QLabel(title_text)
-        lbl.setProperty("class", "headerLabel")
-        lbl.setAlignment(Qt.AlignCenter)
-        top_bar.addWidget(lbl)
-        phantom = QWidget()
-        phantom.setFixedSize(40, 40)
-        top_bar.addWidget(phantom, 0, Qt.AlignRight)
+        back_btn.setFixedHeight(36)
+        back_btn.setObjectName("backArrowButton")
+        top_bar.addWidget(back_btn, 0, Qt.AlignLeft)
+        top_bar.addStretch(1)
         return top_bar
+
+    def _on_page_changed(self, index: int):
+        # Header title
+        title = self.index_to_title.get(index, "Ski Jumping Simulator")
+        self.header_title_label.setText(title)
+
+        # Active nav button
+        mapping = {
+            self.MAIN_MENU_IDX: self._nav_btn_start,
+            self.SINGLE_JUMP_IDX: self._nav_btn_single,
+            self.COMPETITION_IDX: self._nav_btn_comp,
+            self.DATA_EDITOR_IDX: self._nav_btn_editor,
+            # self.DESCRIPTION_IDX: no sidebar button
+            self.SETTINGS_IDX: self._nav_btn_settings,
+            # self.JUMP_REPLAY_IDX: no sidebar button
+        }
+        btn = mapping.get(index)
+        if btn is not None:
+            self.nav_sidebar.set_active(btn)
 
     def _create_form_row(self, label_text, widget):
         row = QHBoxLayout()
-        row.addWidget(QLabel(label_text))
+        label = QLabel(label_text)
+        # Stała szerokość etykiet, aby kolumna z polami wyrównywała się
+        label.setFixedWidth(100)
+        row.addWidget(label)
+        # Pola wejściowe mają wypełniać dostępną szerokość i mieć wspólną minimalną szerokość
+        try:
+            widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        except Exception:
+            pass
         row.addWidget(widget)
         return row
 
@@ -2690,30 +2465,13 @@ class MainWindow(QMainWindow):
             if jumper in self.selection_order:
                 self.selection_order.remove(jumper)
 
-        # Aktualizuj licznik wybranych zawodników
+        # Aktualizuj licznik wybranych zawodników (pozostaje niebieski)
         if hasattr(self, "selected_count_label"):
             count = len(self.selection_order)
             self.selected_count_label.setText(f"Wybrano: {count} zawodników")
-            if count > 0:
-                self.selected_count_label.setStyleSheet("""
-                    QLabel {
-                        color: #28a745;
-                        font-weight: bold;
-                        padding: 8px;
-                        background-color: rgba(40, 167, 69, 0.1);
-                        border-radius: 4px;
-                    }
-                """)
-            else:
-                self.selected_count_label.setStyleSheet("""
-                    QLabel {
-                        color: #0078d4;
-                        font-weight: bold;
-                        padding: 8px;
-                        background-color: rgba(0, 120, 212, 0.1);
-                        border-radius: 4px;
-                    }
-                """)
+            self.selected_count_label.setProperty("chip", True)
+            self.selected_count_label.setProperty("variant", "primary")
+            self.selected_count_label.setStyleSheet("")
 
         # Aktualizuj rekomendowaną belkę jeśli skocznia jest wybrana
         if hasattr(self, "comp_hill_combo") and self.comp_hill_combo.currentIndex() > 0:
@@ -2730,36 +2488,12 @@ class MainWindow(QMainWindow):
 
         if checked_count < self.jumper_list_widget.count():
             new_state = Qt.Checked
-            self.toggle_all_button.setText("☐ Odznacz wszystkich")
-            self.toggle_all_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #dc3545;
-                    color: white;
-                    border: none;
-                    padding: 8px 16px;
-                    border-radius: 4px;
-                    font-weight: bold;
-                }
-                QPushButton:hover {
-                    background-color: #c82333;
-                }
-            """)
+            self.toggle_all_button.setText("Odznacz wszystkich")
+            self.toggle_all_button.setProperty("variant", "danger")
         else:
             new_state = Qt.Unchecked
             self.toggle_all_button.setText("Zaznacz wszystkich")
-            self.toggle_all_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #0078d4;
-                    color: white;
-                    border: none;
-                    padding: 8px 16px;
-                    border-radius: 4px;
-                    font-weight: bold;
-                }
-                QPushButton:hover {
-                    background-color: #005ea6;
-                }
-            """)
+            self.toggle_all_button.setProperty("variant", "primary")
 
         self.jumper_list_widget.itemChanged.disconnect(self._on_jumper_item_changed)
         for i in range(self.jumper_list_widget.count()):
@@ -2773,30 +2507,11 @@ class MainWindow(QMainWindow):
                 for i in range(self.jumper_list_widget.count())
             ]
 
-        # Aktualizuj licznik wybranych zawodników po zmianie stanu
+        # Aktualizuj licznik wybranych zawodników po zmianie stanu (niebieski)
         if hasattr(self, "selected_count_label"):
             count = len(self.selection_order)
             self.selected_count_label.setText(f"Wybrano: {count} zawodników")
-            if count > 0:
-                self.selected_count_label.setStyleSheet("""
-                    QLabel {
-                        color: #28a745;
-                        font-weight: bold;
-                        padding: 8px;
-                        background-color: rgba(40, 167, 69, 0.1);
-                        border-radius: 4px;
-                    }
-                """)
-            else:
-                self.selected_count_label.setStyleSheet("""
-                    QLabel {
-                        color: #0078d4;
-                        font-weight: bold;
-                        padding: 8px;
-                        background-color: rgba(0, 120, 212, 0.1);
-                        border-radius: 4px;
-                    }
-                """)
+            self.selected_count_label.setProperty("variant", "primary")
 
         # Aktualizuj rekomendowaną belkę jeśli skocznia jest wybrana
         if hasattr(self, "comp_hill_combo") and self.comp_hill_combo.currentIndex() > 0:
@@ -2828,17 +2543,7 @@ class MainWindow(QMainWindow):
 
         # Pokaż wskaźnik ładowania
         self.recommended_gate_label.setText("Obliczanie rekomendacji...")
-        self.recommended_gate_label.setStyleSheet("""
-            QLabel {
-                color: #ffc107;
-                font-weight: bold;
-                font-size: 12px;
-                padding: 4px 8px;
-                background-color: rgba(255, 193, 7, 0.1);
-                border-radius: 4px;
-                border: 1px solid #ffc107;
-            }
-        """)
+        self.recommended_gate_label.setProperty("variant", "primary")
         self.recommended_gate_label.setVisible(True)
         self.gate_info_label.setVisible(False)
 
@@ -2858,18 +2563,8 @@ class MainWindow(QMainWindow):
         ):
             return
 
-        # Przywróć normalny styl (niebieski zamiast zielonego)
-        self.recommended_gate_label.setStyleSheet("""
-            QLabel {
-                color: #0078d4;
-                font-weight: bold;
-                font-size: 12px;
-                padding: 4px 8px;
-                background-color: rgba(0, 120, 212, 0.1);
-                border-radius: 4px;
-                border: 1px solid #0078d4;
-            }
-        """)
+        # Przywróć styl chip "info"
+        self.recommended_gate_label.setProperty("variant", "info")
 
         # Aktualizuj wyświetlanie
         self.recommended_gate_label.setText(f"Rekomendowana: {recommended_gate}")
@@ -2913,6 +2608,10 @@ class MainWindow(QMainWindow):
 
         result_data = self.competition_results[row]
         jumper = result_data["jumper"]
+
+        # Klik na kolumnę 2 (Zawodnik) – obecnie bez akcji
+        if column == 2:
+            return
 
         # Kolumny z dystansami to 3 (I seria) i 5 (II seria)
         if column in [3, 5]:
@@ -2982,15 +2681,175 @@ class MainWindow(QMainWindow):
             except (ValueError, TypeError):
                 return
 
+    def _show_jumper_card(self, jumper: "Jumper"):
+        return
+
+        # DEAD CODE BLOCK START (removed feature)
+        card_layout = None
+        card = None
+        # style_meter placeholder removed
+        return
+        # DEAD CODE BLOCK END
+
+        header = QLabel(str(jumper))
+        header.setProperty("chip", True)
+        header.setProperty("variant", "primary")
+        header.setAlignment(Qt.AlignCenter)
+        card_layout.addWidget(header)
+
+        # Flaga i kraj
+        flag_row = QHBoxLayout()
+        flag_row.setSpacing(10)
+        flag_label = QLabel()
+        flag_pix = self._create_rounded_flag_pixmap(
+            jumper.nationality, QSize(48, 32), 6
+        )
+        if not flag_pix.isNull():
+            flag_label.setPixmap(flag_pix)
+        flag_row.addStretch(1)
+        flag_row.addWidget(flag_label)
+        country_label = QLabel(f"Kraj: {jumper.nationality.upper()}")
+        flag_row.addWidget(country_label)
+        flag_row.addStretch(1)
+        card_layout.addLayout(flag_row)
+
+        # Siatka statystyk (czytelnie, bez zbędnych ramek)
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(20)
+        grid.setVerticalSpacing(8)
+
+        def add_stat(row_i: int, label_text: str, value_text: str):
+            lbl = QLabel(label_text)
+            val = QLabel(value_text)
+            f = val.font()
+            f.setBold(True)
+            val.setFont(f)
+            grid.addWidget(lbl, row_i, 0, Qt.AlignRight)
+            grid.addWidget(val, row_i, 1, Qt.AlignLeft)
+
+        add_stat(0, "Wiek:", str(getattr(jumper, "age", "-")))
+        add_stat(1, "Wzrost:", f"{getattr(jumper, 'height', '-')}")
+        add_stat(2, "Waga:", f"{getattr(jumper, 'weight', '-')}")
+        add_stat(3, "Siła wybicia:", f"{getattr(jumper, 'takeoff_force', '-')}")
+        add_stat(4, "Timing:", f"{getattr(jumper, 'timing', '-')}")
+        add_stat(5, "Styl lotu:", f"{getattr(jumper, 'flight_style', '-')}")
+        add_stat(
+            6, "Opór w locie:", f"{getattr(jumper, 'flight_drag_coefficient', '-')}"
+        )
+        add_stat(
+            7, "Powierzchnia czołowa:", f"{getattr(jumper, 'flight_frontal_area', '-')}"
+        )
+        add_stat(8, "Telemark:", f"{getattr(jumper, 'telemark', '-')}")
+
+        card_layout.addLayout(grid)
+
+        # Paski 0-100 jak w edytorze (minimalistyczne, w motywie)
+        meters = QVBoxLayout()
+        meters.setSpacing(10)
+
+        def meter_row(name: str, value_0_100: int) -> QWidget:
+            w = QWidget()
+            h = QHBoxLayout(w)
+            h.setContentsMargins(0, 0, 0, 0)
+            h.setSpacing(10)
+            h.addWidget(QLabel(name))
+            bar = QProgressBar()
+            bar.setRange(0, 100)
+            bar.setValue(max(0, min(100, int(value_0_100))))
+            bar.setTextVisible(False)
+            bar.setFixedHeight(12)
+            bar.setStyleSheet(
+                "QProgressBar{background:#151923;border:1px solid #2a2f3a;border-radius:6px;}"
+                "QProgressBar::chunk{background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #4c84ff, stop:1 #5b90ff);border-radius:6px;}"
+            )
+            h.addWidget(bar, 1)
+            return w
+
+        # Pozycja najazdowa (z inrun_drag_coefficient)
+        inrun_drag = getattr(jumper, "inrun_drag_coefficient", None) or 0.46
+        inrun_pos = drag_coefficient_to_slider(float(inrun_drag))
+
+        takeoff_force_val = getattr(jumper, "takeoff_force", None) or 1500.0
+        takeoff_slider = jump_force_to_slider(float(takeoff_force_val))
+
+        timing_val = int((getattr(jumper, "timing", None) or 50))
+
+        drag_coeff_val = getattr(jumper, "flight_drag_coefficient", None) or 0.5
+        drag_slider = drag_coefficient_flight_to_slider(float(drag_coeff_val))
+
+        lift_coeff_val = getattr(jumper, "flight_lift_coefficient", None) or 0.8
+        technique_slider = lift_coefficient_to_slider(float(lift_coeff_val))
+
+        telemark_val = int((getattr(jumper, "telemark", None) or 50))
+
+        # frontal_area used for style chip only in removed UI
+
+        meters.addWidget(meter_row("Pozycja najazdowa", inrun_pos))
+        meters.addWidget(meter_row("Siła wybicia", takeoff_slider))
+        meters.addWidget(meter_row("Timing wybicia", timing_val))
+        meters.addWidget(meter_row("Technika lotu", technique_slider))
+        meters.addWidget(meter_row("Opór powietrza", drag_slider))
+        meters.addWidget(meter_row("Telemark", telemark_val))
+
+        # Styl lotu – bez paska, elegancki chip
+        style_chip = QLabel(f"Styl lotu: {getattr(jumper, 'flight_style', 'Normalny')}")
+        style_chip.setProperty("chip", True)
+        style_chip.setProperty("variant", "primary")
+        style_chip.setAlignment(Qt.AlignCenter)
+        meters.addWidget(style_chip)
+
+        # OVR – średnia z metryk 0-100
+        ovr = round(
+            (
+                inrun_pos
+                + takeoff_slider
+                + timing_val
+                + technique_slider
+                + drag_slider
+                + telemark_val
+            )
+            / 6
+        )
+        ovr_chip = QLabel(f"OVR {ovr}")
+        ovr_chip.setProperty("chip", True)
+        ovr_chip.setProperty(
+            "variant",
+            "success" if ovr >= 70 else ("warning" if ovr >= 50 else "danger"),
+        )
+        ovr_chip.setAlignment(Qt.AlignCenter)
+        meters.addWidget(ovr_chip)
+
+        card_layout.addLayout(meters)
+
+        # Przycisk powrotu do tabeli (na dole też)
+        back_btn = QPushButton("Wróć do tabeli")
+        back_btn.setProperty("variant", "primary")
+        back_btn.clicked.connect(
+            lambda: self.central_widget.setCurrentIndex(self.COMPETITION_IDX)
+        )
+        card_layout.addWidget(back_btn, 0, Qt.AlignCenter)
+
+        # Dodaj i pokaż stronę
+        self.central_widget.addWidget(card)
+        self.central_widget.setCurrentWidget(card)
+
     def _on_qualification_cell_clicked(self, row, column):
         """Obsługa kliknięcia w komórkę tabeli kwalifikacji"""
         self.play_sound()
 
-        if not self.qualification_results or row >= len(self.qualification_results):
-            return
-
-        result = self.qualification_results[row]
+        # Pobierz obiekt wyniku przypisany do wiersza (po sortowaniu)
+        result_item = self.qualification_table.item(row, 0)
+        result = result_item.data(Qt.UserRole) if result_item is not None else None
+        # Fallback (gdyby nie było danych na elemencie)
+        if result is None:
+            if not self.qualification_results or row >= len(self.qualification_results):
+                return
+            result = self.qualification_results[row]
         jumper = result["jumper"]
+
+        # Klik na kolumnę 2 (Zawodnik) – obecnie bez akcji
+        if column == 2:
+            return
 
         # Sprawdź czy kliknięto w kolumnę z dystansem (kolumna 3)
         if column == 3 and result.get("distance", 0) > 0:  # Dystans kwalifikacji
@@ -3085,44 +2944,23 @@ class MainWindow(QMainWindow):
     ):
         """Tworzy kartę z informacjami o odległości i obliczeniach punktów."""
         card = QWidget()
-        card.setStyleSheet("""
-            QWidget {
-                background-color: #2a2a2a;
-                border: 1px solid #4a4a4a;
-                border-radius: 6px;
-                padding: 8px;
-                margin: 2px;
-            }
-        """)
+        # Neutralna karta bez lokalnych kolorów; wygląd po stronie QSS
+        card.setProperty("class", "card")
 
         layout = QVBoxLayout(card)
         layout.setSpacing(6)
 
         # Tytuł karty
         title = QLabel("Punkty za odległość")
-        title.setStyleSheet("""
-            QLabel {
-                font-size: 13px;
-                font-weight: bold;
-                color: #ffffff;
-                padding: 2px;
-            }
-        """)
+        title.setProperty("chip", True)
+        title.setProperty("variant", "primary")
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
 
         # Główna informacja o odległości
         distance_info = QLabel(f"Odległość: {format_distance_with_unit(distance)}")
-        distance_info.setStyleSheet("""
-            QLabel {
-                font-size: 15px;
-                font-weight: bold;
-                color: #28a745;
-                padding: 6px;
-                background-color: rgba(40, 167, 69, 0.1);
-                border-radius: 4px;
-            }
-        """)
+        distance_info.setProperty("chip", True)
+        distance_info.setProperty("variant", "success")
         distance_info.setAlignment(Qt.AlignCenter)
         layout.addWidget(distance_info)
 
@@ -3133,33 +2971,12 @@ class MainWindow(QMainWindow):
         left_col = QVBoxLayout()
 
         k_point_label = QLabel(f"K-point: {k_point:.1f} m")
-        k_point_label.setStyleSheet("""
-            QLabel {
-                font-size: 11px;
-                color: #cccccc;
-                padding: 2px;
-            }
-        """)
         left_col.addWidget(k_point_label)
 
         difference_label = QLabel(f"Różnica: {difference:+.1f} m")
-        difference_label.setStyleSheet("""
-            QLabel {
-                font-size: 11px;
-                color: #cccccc;
-                padding: 2px;
-            }
-        """)
         left_col.addWidget(difference_label)
 
         meter_label = QLabel(f"Meter value: {meter_value:.1f} pkt/m")
-        meter_label.setStyleSheet("""
-            QLabel {
-                font-size: 11px;
-                color: #cccccc;
-                padding: 2px;
-            }
-        """)
         left_col.addWidget(meter_label)
 
         details_layout.addLayout(left_col)
@@ -3168,39 +2985,17 @@ class MainWindow(QMainWindow):
         right_col = QVBoxLayout()
 
         base_points_label = QLabel("60.0 pkt")
-        base_points_label.setStyleSheet("""
-            QLabel {
-                font-size: 11px;
-                color: #28a745;
-                padding: 2px;
-                font-weight: bold;
-            }
-        """)
+        base_points_label.setProperty("role", "meta")
         right_col.addWidget(base_points_label)
 
         bonus_points = difference * meter_value
         bonus_label = QLabel(f"{bonus_points:+.1f} pkt")
-        bonus_label.setStyleSheet("""
-            QLabel {
-                font-size: 11px;
-                color: #0078d4;
-                padding: 2px;
-                font-weight: bold;
-            }
-        """)
+        bonus_label.setProperty("role", "meta")
         right_col.addWidget(bonus_label)
 
         total_distance_label = QLabel(f"{distance_points:.1f} pkt")
-        total_distance_label.setStyleSheet("""
-            QLabel {
-                font-size: 13px;
-                color: #ffffff;
-                padding: 4px;
-                background-color: #28a745;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-        """)
+        total_distance_label.setProperty("chip", True)
+        total_distance_label.setProperty("variant", "success")
         total_distance_label.setAlignment(Qt.AlignCenter)
         right_col.addWidget(total_distance_label)
 
@@ -3215,29 +3010,15 @@ class MainWindow(QMainWindow):
         title_text: nagłówek karty (np. "Noty sędziów - I seria").
         """
         card = QWidget()
-        card.setStyleSheet("""
-            QWidget {
-                background-color: #2a2a2a;
-                border: 1px solid #4a4a4a;
-                border-radius: 6px;
-                padding: 8px;
-                margin: 2px;
-            }
-        """)
+        card.setProperty("class", "card")
 
         layout = QVBoxLayout(card)
         layout.setSpacing(4)
 
         # Tytuł karty
         title = QLabel(title_text)
-        title.setStyleSheet("""
-            QLabel {
-                font-size: 13px;
-                font-weight: bold;
-                color: #ffffff;
-                padding: 2px;
-            }
-        """)
+        title.setProperty("chip", True)
+        title.setProperty("variant", "primary")
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
 
@@ -3266,13 +3047,6 @@ class MainWindow(QMainWindow):
 
             # Nazwa sędziego
             judge_name = QLabel(f"Sędzia {i + 1}")
-            judge_name.setStyleSheet("""
-                QLabel {
-                    font-size: 9px;
-                    color: #cccccc;
-                    font-weight: bold;
-                }
-            """)
             judge_name.setAlignment(Qt.AlignCenter)
             score_layout.addWidget(judge_name)
 
@@ -3283,29 +3057,11 @@ class MainWindow(QMainWindow):
 
             # Kolorowanie not - zawsze 2 skrajne na czerwono, 3 środkowe na zielono
             if i in red_indices:
-                # Czerwony dla wykluczonych not (2 skrajne)
-                score_label.setStyleSheet("""
-                    QLabel {
-                        font-size: 13px;
-                        font-weight: bold;
-                        color: #ffffff;
-                        background-color: #dc3545;
-                        border-radius: 4px;
-                        padding: 4px;
-                    }
-                """)
+                score_label.setProperty("chip", True)
+                score_label.setProperty("variant", "danger")
             else:
-                # Zielony dla liczonych not (3 środkowe)
-                score_label.setStyleSheet("""
-                    QLabel {
-                        font-size: 13px;
-                        font-weight: bold;
-                        color: #ffffff;
-                        background-color: #28a745;
-                        border-radius: 4px;
-                        padding: 4px;
-                    }
-                """)
+                score_label.setProperty("chip", True)
+                score_label.setProperty("variant", "success")
 
             score_layout.addWidget(score_label)
             scores_layout.addWidget(score_widget)
@@ -3315,35 +3071,30 @@ class MainWindow(QMainWindow):
         # Suma not
         total_judge_points = judge_data["total_score"]
         judge_summary = QLabel(f"Suma (bez skrajnych): {total_judge_points:.1f} pkt")
-        judge_summary.setStyleSheet("""
-            QLabel {
-                font-size: 12px;
-                font-weight: bold;
-                color: #0078d4;
-                padding: 6px;
-                background-color: rgba(0, 120, 212, 0.1);
-                border-radius: 4px;
-            }
-        """)
+        judge_summary.setProperty("chip", True)
+        judge_summary.setProperty("variant", "primary")
         judge_summary.setAlignment(Qt.AlignCenter)
         layout.addWidget(judge_summary)
 
-        # Informacja o lądowaniu
-        landing_info = "Lądowanie: "
-        if judge_data["telemark_landing"]:
-            landing_info += "Telemark ✅"
-        else:
-            landing_info += "Zwykłe"
-
-        landing_label = QLabel(landing_info)
-        landing_label.setStyleSheet("""
-            QLabel {
-                font-size: 10px;
-                color: #cccccc;
-                padding: 2px;
-            }
-        """)
+        # Informacja o lądowaniu (uwzględnia upadek/podpórkę)
+        landing_label = QLabel()
         landing_label.setAlignment(Qt.AlignCenter)
+        landing_label.setProperty("chip", True)
+        event = judge_data.get("event")
+        if event == "fall":
+            landing_label.setText("Lądowanie: Upadek ❌")
+            landing_label.setProperty("variant", "danger")
+        elif event == "hand":
+            landing_label.setText("Lądowanie: Podpórka ❗")
+            landing_label.setProperty("variant", "warning")
+        else:
+            # SAFE – rozróżnij telemark vs zwykłe
+            if judge_data.get("telemark_landing", False):
+                landing_label.setText("Lądowanie: Telemark ✅")
+                landing_label.setProperty("variant", "success")
+            else:
+                landing_label.setText("Lądowanie: Zwykłe")
+                landing_label.setProperty("variant", "primary")
         layout.addWidget(landing_label)
 
         self.points_breakdown_layout.addWidget(card)
@@ -3351,51 +3102,28 @@ class MainWindow(QMainWindow):
     def _create_total_card(self, distance_points, judge_data):
         """Tworzy kartę z sumą punktów."""
         card = QWidget()
-        card.setStyleSheet("""
-            QWidget {
-                background-color: #1a1a1a;
-                border: 1px solid #28a745;
-                border-radius: 6px;
-                padding: 8px;
-                margin: 3px;
-            }
-        """)
+        card.setProperty("class", "card")
 
         layout = QVBoxLayout(card)
         layout.setSpacing(4)
 
         # Tytuł karty
         title = QLabel("Suma punktów")
-        title.setStyleSheet("""
-            QLabel {
-                font-size: 13px;
-                font-weight: bold;
-                color: #ffffff;
-                padding: 2px;
-            }
-        """)
+        title.setProperty("role", "subtitle")
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
 
         # Minimalistyczna suma punktów
         if judge_data:
-            judge_points = judge_data["total_score"]
-            total_points = distance_points + judge_data["total_score"]
-            calc_text = f"{total_points:.1f} pkt"
+            calc_text = (
+                f"{(distance_points + float(judge_data['total_score'])):.1f} pkt"
+            )
         else:
             calc_text = f"{distance_points:.1f} pkt"
 
         calc_label = QLabel(calc_text)
-        calc_label.setStyleSheet("""
-            QLabel {
-                font-size: 15px;
-                font-weight: bold;
-                color: #28a745;
-                padding: 4px;
-                background-color: rgba(40, 167, 69, 0.1);
-                border-radius: 4px;
-            }
-        """)
+        calc_label.setProperty("chip", True)
+        calc_label.setProperty("variant", "primary")
         calc_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(calc_label)
 
@@ -3416,16 +3144,7 @@ class MainWindow(QMainWindow):
 
         title = QLabel(title_text)
         title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet(
-            """
-            QLabel {
-                font-size: 13px;
-                font-weight: bold;
-                color: #ffffff;
-                margin: 0px 0px 2px 0px;
-            }
-            """
-        )
+        title.setProperty("role", "subtitle")
         vbox.addWidget(title)
 
         table = QTableWidget(1, 3)
@@ -3437,18 +3156,11 @@ class MainWindow(QMainWindow):
         table.setShowGrid(False)
         table.verticalHeader().setDefaultSectionSize(32)
         table.setRowHeight(0, 32)
-        table.setStyleSheet(
-            """
-            QTableWidget { background-color: #1f1f1f; border: 1px solid #2a2a2a; }
-            QHeaderView::section { background-color: #242424; color: #cccccc; border: none; padding: 4px 6px; font-size: 12px; }
-            QTableWidget::item { padding: 6px; color: #ffffff; font-size: 14px; }
-            """
-        )
+        # Użyj globalnego QSS dla tabel
 
-        def mk_item(text: str, color: str):
+        def mk_item(text: str):
             item = QTableWidgetItem(text)
             item.setTextAlignment(Qt.AlignCenter)
-            item.setForeground(QColor(color))
             f = item.font()
             f.setBold(True)
             item.setFont(f)
@@ -3463,9 +3175,9 @@ class MainWindow(QMainWindow):
         extra = 28  # margines bezpieczeństwa na padding/styl
         table.setFixedHeight(header_h + row_h + frame + extra)
 
-        table.setItem(0, 0, mk_item(f"{distance_points:.1f} pkt", "#28a745"))
-        table.setItem(0, 1, mk_item(f"{judge_points:.1f} pkt", "#0078d4"))
-        table.setItem(0, 2, mk_item(f"{total_points:.1f} pkt", "#ffffff"))
+        table.setItem(0, 0, mk_item(f"{distance_points:.1f} pkt"))
+        table.setItem(0, 1, mk_item(f"{judge_points:.1f} pkt"))
+        table.setItem(0, 2, mk_item(f"{total_points:.1f} pkt"))
 
         vbox.addWidget(table)
         self.points_breakdown_layout.addWidget(container)
@@ -3506,15 +3218,7 @@ class MainWindow(QMainWindow):
 
         self._create_total_card(distance_points, judge_data)
 
-        # Calculate judge points if available
-        judge_points = 0.0
-        if judge_data:
-            judge_points = judge_data["total_score"]
-
-        # Calculate total points
-        total_points = distance_points + judge_points
-
-        # Usunięto referencje do starej formuły obliczeniowej
+        # Usunięto zbędne lokalne obliczenia sumy – karta sumy jest tworzona powyżej
 
         # Aktualizuj informacje o skoczni
         self.points_hill_name.setText(f"Skocznia: {self.competition_hill}")
@@ -3818,19 +3522,16 @@ class MainWindow(QMainWindow):
         # Wyczyść figure przed rozpoczęciem nowej animacji
         figure.clear()
         ax = figure.add_subplot(111)
-        ax.set_facecolor(
-            f"#{self.adjust_brightness('1a1a1a' if self.current_theme == 'dark' else 'f0f0f0', self.contrast_level)}"
-        )
-        figure.patch.set_facecolor(
-            f"#{self.adjust_brightness('1a1a1a' if self.current_theme == 'dark' else 'f0f0f0', self.contrast_level)}"
-        )
+        # Ciemne tło zgodne z motywem
+        ax.set_facecolor("#0f1115")
+        figure.patch.set_facecolor("#0f1115")
         ax.axis("off")
         ax.set_aspect("auto")
 
         inrun_length_to_show = 15.0
         x_inrun = np.linspace(-inrun_length_to_show, 0, 50)
         y_inrun = np.tan(-hill.alpha_rad) * x_inrun
-        ax.plot(x_inrun, y_inrun, color="#00aaff", linewidth=3)
+        ax.plot(x_inrun, y_inrun, color="#4c84ff", linewidth=2.5)
 
         max_y_inrun = y_inrun[0] if len(y_inrun) > 0 else 0
         # Poprawione limity - animacja będzie wyżej i ładniej sformatowana
@@ -3841,10 +3542,16 @@ class MainWindow(QMainWindow):
         )
 
         (jumper_point,) = ax.plot(
-            [], [], "ro", markersize=10, markeredgecolor="white", markeredgewidth=2
+            [],
+            [],
+            "o",
+            color="#e8eaf1",
+            markersize=7,
+            markeredgecolor="#4c84ff",
+            markeredgewidth=1.5,
         )
-        (trail_line,) = ax.plot([], [], color="#4da8ff", linewidth=3, alpha=0.7)
-        (landing_line,) = ax.plot([], [], color="#00aaff", linewidth=4, alpha=0.8)
+        (trail_line,) = ax.plot([], [], color="#5b90ff", linewidth=2.5, alpha=0.7)
+        (landing_line,) = ax.plot([], [], color="#4c84ff", linewidth=3, alpha=0.8)
         plot_elements = [jumper_point, trail_line, landing_line]
 
         def init():
@@ -3900,16 +3607,9 @@ class MainWindow(QMainWindow):
             self.single_jump_stats_label.setText(
                 "BŁĄD: Musisz wybrać zawodnika i skocznię!"
             )
-            self.single_jump_stats_label.setStyleSheet("""
-                QLabel {
-                    color: #dc3545;
-                    font-size: 14px;
-                    padding: 15px;
-                    background-color: rgba(220, 53, 69, 0.1);
-                    border-radius: 8px;
-                    border: 2px solid rgba(220, 53, 69, 0.3);
-                }
-            """)
+            self.single_jump_stats_label.setProperty("chip", True)
+            self.single_jump_stats_label.setProperty("variant", "danger")
+            self.single_jump_stats_label.setStyleSheet("")
             return
         gate = self.gate_spin.value()
 
@@ -3937,16 +3637,9 @@ class MainWindow(QMainWindow):
             )
 
             self.single_jump_stats_label.setText(stats_text)
-            self.single_jump_stats_label.setStyleSheet("""
-                QLabel {
-                    color: #28a745;
-                    font-size: 14px;
-                    padding: 15px;
-                    background-color: rgba(40, 167, 69, 0.1);
-                    border-radius: 8px;
-                    border: 2px solid rgba(40, 167, 69, 0.3);
-                }
-            """)
+            self.single_jump_stats_label.setProperty("chip", True)
+            self.single_jump_stats_label.setProperty("variant", "success")
+            self.single_jump_stats_label.setStyleSheet("")
 
             self._run_animation_on_canvas(
                 self.canvas, self.figure, sim_data, self.selected_hill
@@ -3954,16 +3647,9 @@ class MainWindow(QMainWindow):
 
         except ValueError as e:
             self.single_jump_stats_label.setText(f"BŁĄD: {str(e)}")
-            self.single_jump_stats_label.setStyleSheet("""
-                QLabel {
-                    color: #dc3545;
-                    font-size: 14px;
-                    padding: 15px;
-                    background-color: rgba(220, 53, 69, 0.1);
-                    border-radius: 8px;
-                    border: 2px solid rgba(220, 53, 69, 0.3);
-                }
-            """)
+            self.single_jump_stats_label.setProperty("chip", True)
+            self.single_jump_stats_label.setProperty("variant", "danger")
+            self.single_jump_stats_label.setStyleSheet("")
 
     def play_sound(self):
         if hasattr(self, "sound_loaded") and self.sound_loaded:
@@ -4014,16 +3700,9 @@ class MainWindow(QMainWindow):
         self.single_jump_stats_label.setText(
             "Wybierz zawodnika i skocznię, aby rozpocząć symulację"
         )
-        self.single_jump_stats_label.setStyleSheet("""
-            QLabel {
-                color: #0078d4;
-                font-size: 14px;
-                padding: 15px;
-                background-color: rgba(0, 120, 212, 0.1);
-                border-radius: 8px;
-                border: 2px solid rgba(0, 120, 212, 0.3);
-            }
-        """)
+        self.single_jump_stats_label.setProperty("chip", True)
+        self.single_jump_stats_label.setProperty("variant", "info")
+        self.single_jump_stats_label.setStyleSheet("")
         if hasattr(self, "figure"):
             self.figure.clear()
             self.canvas.draw()
@@ -4062,13 +3741,16 @@ class MainWindow(QMainWindow):
             self.audio_output.setVolume(self.volume_level)
 
     def update_styles(self):
-        self.setStyleSheet(self.themes[self.current_theme](self.contrast_level))
+        # Respect global QSS. Only refresh figure backgrounds to match theme if needed.
 
         # Apply styles to both tables
         if hasattr(self, "results_table"):
             self.results_table.setStyleSheet("")
         if hasattr(self, "qualification_table"):
             self.qualification_table.setStyleSheet("")
+
+        # Nie nadpisuj globalnego QSS lokalnym styleSheet na oknie, bo kasuje to reguły
+        # dla QComboBox/QSlider. Tło zostawiamy po stronie QSS motywu.
 
         if hasattr(self, "figure"):
             self.figure.set_facecolor(
@@ -4092,18 +3774,29 @@ class MainWindow(QMainWindow):
         if not os.path.exists(flag_path):
             return QPixmap()
         try:
+            # Wysokiej jakości antyaliasing: rysuj maskę w skali i przeskaluj LANCZOS
+            scale = 4
+            target_w, target_h = size.width(), size.height()
+            hi_w, hi_h = target_w * scale, target_h * scale
             with Image.open(flag_path) as img:
-                img_resized = img.resize(
-                    (size.width(), size.height()), Image.Resampling.LANCZOS
-                ).convert("RGBA")
-            mask = Image.new("L", img_resized.size, 0)
-            draw = ImageDraw.Draw(mask)
-            draw.rounded_rectangle(((0, 0), img_resized.size), radius=radius, fill=255)
-            img_resized.putalpha(mask)
+                img = img.convert("RGBA")
+                img_resized = img.resize((hi_w, hi_h), Image.Resampling.LANCZOS)
+            mask_hi = Image.new("L", (hi_w, hi_h), 0)
+            draw = ImageDraw.Draw(mask_hi)
+            draw.rounded_rectangle(
+                ((0, 0), (hi_w, hi_h)), radius=radius * scale, fill=255
+            )
+            # Minimalne rozmycie krawędzi maski, by usunąć pikselowe rogi
+            mask_hi = mask_hi.filter(ImageFilter.GaussianBlur(radius=scale * 0.35))
+            img_resized.putalpha(mask_hi)
+            # Downscale do docelowego rozmiaru z zachowaniem antyaliasingu
+            final_img = img_resized.resize(
+                (target_w, target_h), Image.Resampling.LANCZOS
+            )
             qimage = QImage(
-                img_resized.tobytes("raw", "RGBA"),
-                img_resized.width,
-                img_resized.height,
+                final_img.tobytes("raw", "RGBA"),
+                final_img.width,
+                final_img.height,
                 QImage.Format_RGBA8888,
             )
             return QPixmap.fromImage(qimage)
@@ -4126,17 +3819,8 @@ class MainWindow(QMainWindow):
             self.competition_status_label.setText(
                 "BŁĄD: Wybierz skocznię i co najmniej jednego zawodnika!"
             )
-            self.competition_status_label.setStyleSheet("""
-                QLabel {
-                    color: #dc3545;
-                    font-weight: bold;
-                    font-size: 14px;
-                    padding: 10px;
-                    background-color: rgba(220, 53, 69, 0.1);
-                    border-radius: 6px;
-                    border-left: 4px solid #dc3545;
-                }
-            """)
+            self.competition_status_label.setProperty("chip", True)
+            self.competition_status_label.setProperty("variant", "danger")
             QTimer.singleShot(3000, lambda: self._reset_status_label())
             return
 
@@ -4208,20 +3892,12 @@ class MainWindow(QMainWindow):
             status_text = f"Rozpoczynanie zawodów na {self.competition_hill.name}... ({len(self.selection_order)} zawodników)"
 
         self.competition_status_label.setText(status_text)
-        self.competition_status_label.setStyleSheet("""
-            QLabel {
-                color: #28a745;
-                font-weight: bold;
-                font-size: 14px;
-                padding: 10px;
-                background-color: rgba(40, 167, 69, 0.1);
-                border-radius: 6px;
-                border-left: 4px solid #28a745;
-            }
-        """)
+        self.competition_status_label.setProperty("chip", True)
+        # Zawody startują → zielony
+        self.competition_status_label.setProperty("variant", "success")
 
         # Zmień przycisk na 'Stop' podczas zawodów
-        self._update_competition_button("Stop", "#dc3545")
+        self._update_competition_button("Stop", variant="danger")
 
         QTimer.singleShot(500, self._process_next_jumper)
 
@@ -4230,17 +3906,9 @@ class MainWindow(QMainWindow):
         self.competition_status_label.setText(
             "Tabela wyników (kliknij odległość, aby zobaczyć powtórkę):"
         )
-        self.competition_status_label.setStyleSheet("""
-            QLabel {
-                color: #0078d4;
-                font-weight: bold;
-                font-size: 14px;
-                padding: 10px;
-                background-color: rgba(0, 120, 212, 0.1);
-                border-radius: 6px;
-                border-left: 4px solid #0078d4;
-            }
-        """)
+        self.competition_status_label.setProperty("chip", True)
+        # Don't override the variant - let it match the button color
+        # The variant will be set by _update_competition_button
 
     def _process_next_jumper(self):
         # Sprawdź czy symulacja jest zatrzymana
@@ -4261,17 +3929,9 @@ class MainWindow(QMainWindow):
             self.competition_status_label.setText(
                 f"🎯 Kwalifikacje: {jumper} skacze..."
             )
-            self.competition_status_label.setStyleSheet("""
-                QLabel {
-                    color: #0078d4;
-                    font-weight: bold;
-                    font-size: 14px;
-                    padding: 10px;
-                    background-color: rgba(0, 120, 212, 0.1);
-                    border-radius: 6px;
-                    border-left: 4px solid #0078d4;
-                }
-            """)
+            self.competition_status_label.setProperty("chip", True)
+            # Kwalifikacje w toku → zielony
+            self.competition_status_label.setProperty("variant", "success")
 
             # Symuluj skok kwalifikacyjny
             try:
@@ -4329,17 +3989,9 @@ class MainWindow(QMainWindow):
             if self.current_round == 1:
                 # Koniec pierwszej serii
                 self.competition_status_label.setText("Koniec 1. serii!")
-                self.competition_status_label.setStyleSheet("""
-                    QLabel {
-                        color: #ffc107;
-                        font-weight: bold;
-                        font-size: 14px;
-                        padding: 10px;
-                        background-color: rgba(255, 193, 7, 0.1);
-                        border-radius: 6px;
-                        border-left: 4px solid #ffc107;
-                    }
-                """)
+                self.competition_status_label.setProperty("chip", True)
+                # Koniec serii → żółty
+                self.competition_status_label.setProperty("variant", "warning")
 
                 self.current_round = 2
                 self.competition_results.sort(key=lambda x: x["p1"], reverse=True)
@@ -4362,20 +4014,14 @@ class MainWindow(QMainWindow):
                     self.competition_status_label.setText(
                         "Zawody zakończone! (Brak finalistów)"
                     )
-                    self.competition_status_label.setStyleSheet("""
-                        QLabel {
-                            color: #dc3545;
-                            font-weight: bold;
-                            font-size: 14px;
-                            padding: 10px;
-                            background-color: rgba(220, 53, 69, 0.1);
-                            border-radius: 6px;
-                            border-left: 4px solid #dc3545;
-                        }
-                    """)
+                    self.competition_status_label.setProperty("chip", True)
+                    # Brak finalistów traktujemy jako zakończone → zielony
+                    self.competition_status_label.setProperty("variant", "success")
 
                     # Przywróć przycisk do stanu początkowego gdy brak finalistów
-                    self._update_competition_button("Rozpocznij zawody", "#28a745")
+                    self._update_competition_button(
+                        "Rozpocznij zawody", variant="success"
+                    )
                     return
 
                 # Ustaw flagę pauzy po pierwszej serii
@@ -4384,17 +4030,8 @@ class MainWindow(QMainWindow):
             else:
                 # Koniec zawodów
                 self.competition_status_label.setText("Zawody zakończone!")
-                self.competition_status_label.setStyleSheet("""
-                    QLabel {
-                        color: #28a745;
-                        font-weight: bold;
-                        font-size: 14px;
-                        padding: 10px;
-                        background-color: rgba(40, 167, 69, 0.1);
-                        border-radius: 6px;
-                        border-left: 4px solid #28a745;
-                    }
-                """)
+                self.competition_status_label.setProperty("chip", True)
+                self.competition_status_label.setProperty("variant", "success")
 
                 self.competition_results.sort(
                     key=lambda x: (x["p1"] + x["p2"]), reverse=True
@@ -4402,7 +4039,7 @@ class MainWindow(QMainWindow):
                 self._update_competition_table()
 
                 # Przywróć przycisk do stanu początkowego na końcu zawodów
-                self._update_competition_button("Rozpocznij zawody", "#28a745")
+                self._update_competition_button("Rozpocznij zawody", variant="success")
             return
 
         jumper = self.competition_order[self.current_jumper_index]
@@ -4411,17 +4048,9 @@ class MainWindow(QMainWindow):
         self.competition_status_label.setText(
             f"🎯 Seria {self.current_round}: {jumper} skacze..."
         )
-        self.competition_status_label.setStyleSheet("""
-            QLabel {
-                color: #0078d4;
-                font-weight: bold;
-                font-size: 14px;
-                padding: 10px;
-                background-color: rgba(0, 120, 212, 0.1);
-                border-radius: 6px;
-                border-left: 4px solid #0078d4;
-            }
-        """)
+        self.competition_status_label.setProperty("chip", True)
+        # Seria w toku → zielony
+        self.competition_status_label.setProperty("variant", "success")
 
         raw_distance = fly_simulation(
             self.competition_hill, jumper, self.competition_gate
@@ -4478,17 +4107,9 @@ class MainWindow(QMainWindow):
         self.competition_status_label.setText(
             f"Kwalifikacje zakończone! {len(qualified_jumpers)} zawodników awansuje do konkursu."
         )
-        self.competition_status_label.setStyleSheet("""
-            QLabel {
-                color: #ffc107;
-                font-weight: bold;
-                font-size: 14px;
-                padding: 10px;
-                background-color: rgba(255, 193, 7, 0.1);
-                border-radius: 6px;
-                border-left: 4px solid #ffc107;
-            }
-        """)
+        self.competition_status_label.setProperty("chip", True)
+        self.competition_status_label.setProperty("variant", "warning")
+        self.competition_status_label.setStyleSheet("")
 
         # Przygotuj dane konkursu (ale nie przełączaj tabeli jeszcze)
         self.qualification_phase = False
@@ -4552,12 +4173,24 @@ class MainWindow(QMainWindow):
             # Miejsce
             place_item = QTableWidgetItem(str(row + 1))
             place_item.setTextAlignment(Qt.AlignCenter)
+            # Zapamiętaj pełny wynik w wierszu, by klik działał niezależnie od sortowania
+            place_item.setData(Qt.UserRole, result)
             self.qualification_table.setItem(row, 0, place_item)
 
-            # Flaga
-            flag_item = QTableWidgetItem()
-            flag_item.setIcon(self.create_rounded_flag_icon(jumper.nationality))
-            self.qualification_table.setItem(row, 1, flag_item)
+            # Flaga — mniejsza, idealnie wycentrowana w kontenerze (tak jak w konkursie)
+            q_flag_pix = self._create_rounded_flag_pixmap(
+                jumper.nationality, size=QSize(24, 16), radius=4
+            )
+            q_flag_container = QWidget()
+            q_flag_layout = QHBoxLayout(q_flag_container)
+            q_flag_layout.setContentsMargins(0, 0, 0, 0)
+            q_flag_layout.setSpacing(0)
+            q_flag_layout.setAlignment(Qt.AlignCenter)
+            q_flag_label = QLabel()
+            if not q_flag_pix.isNull():
+                q_flag_label.setPixmap(q_flag_pix)
+            q_flag_layout.addWidget(q_flag_label, 0, Qt.AlignCenter)
+            self.qualification_table.setCellWidget(row, 1, q_flag_container)
 
             # Zawodnik
             jumper_item = QTableWidgetItem(str(jumper))
@@ -4575,12 +4208,13 @@ class MainWindow(QMainWindow):
 
             # Kolorowanie awansujących
             if row < self.qualification_limit:
+                # Nie nadpisujemy koloru tłem — użyjemy pogrubienia, by trzymać się motywu
                 for col in range(self.qualification_table.columnCount()):
                     item = self.qualification_table.item(row, col)
                     if item:
-                        item.setBackground(
-                            QColor(40, 167, 69, 50)
-                        )  # Zielone tło dla awansujących
+                        f = item.font()
+                        f.setBold(True)
+                        item.setFont(f)
 
     def _start_second_round(self):
         """Rozpoczyna drugą serię zawodów"""
@@ -4588,18 +4222,9 @@ class MainWindow(QMainWindow):
         self.competition_status_label.setText(
             f"Rozpoczynanie 2. serii... ({len(self.competition_order)} finalistów)"
         )
-        self.competition_status_label.setStyleSheet("""
-            QLabel {
-                color: #28a745;
-                font-weight: bold;
-                font-size: 14px;
-                padding: 10px;
-                background-color: rgba(40, 167, 69, 0.1);
-                border-radius: 6px;
-                border-left: 4px solid #28a745;
-            }
-        """)
-        self._update_competition_button("Stop", "#dc3545")
+        self.competition_status_label.setProperty("chip", True)
+        self.competition_status_label.setProperty("variant", "success")
+        self._update_competition_button("Stop", variant="danger")
         QTimer.singleShot(1000, self._process_next_jumper)
 
     def _pause_after_qualification(self):
@@ -4607,36 +4232,18 @@ class MainWindow(QMainWindow):
         self.competition_status_label.setText(
             "Kwalifikacje zakończone! Kliknij przycisk aby rozpocząć konkurs."
         )
-        self.competition_status_label.setStyleSheet("""
-            QLabel {
-                color: #ffc107;
-                font-weight: bold;
-                font-size: 14px;
-                padding: 10px;
-                background-color: rgba(255, 193, 7, 0.1);
-                border-radius: 6px;
-                border-left: 4px solid #ffc107;
-            }
-        """)
-        self._update_competition_button("Rozpocznij I serię", "#ffc107")
+        self.competition_status_label.setProperty("chip", True)
+        self.competition_status_label.setProperty("variant", "warning")
+        self._update_competition_button("Rozpocznij I serię", variant="warning")
 
     def _pause_after_first_round(self):
         """Pauza po pierwszej serii"""
         self.competition_status_label.setText(
             "I seria zakończona! Kliknij przycisk aby rozpocząć II serię."
         )
-        self.competition_status_label.setStyleSheet("""
-            QLabel {
-                color: #ffc107;
-                font-weight: bold;
-                font-size: 14px;
-                padding: 10px;
-                background-color: rgba(255, 193, 7, 0.1);
-                border-radius: 6px;
-                border-left: 4px solid #ffc107;
-            }
-        """)
-        self._update_competition_button("Rozpocznij II serię", "#ffc107")
+        self.competition_status_label.setProperty("chip", True)
+        self.competition_status_label.setProperty("variant", "warning")
+        self._update_competition_button("Rozpocznij II serię", variant="warning")
 
     def _on_competition_button_clicked(self):
         """Obsługa kliknięcia głównego przycisku zawodów"""
@@ -4661,26 +4268,31 @@ class MainWindow(QMainWindow):
             # Rozpocznij drugą serię
             self._start_second_round()
 
-    def _update_competition_button(self, text, color="#28a745"):
-        """Aktualizuje tekst i kolor głównego przycisku zawodów"""
+    def _update_competition_button(self, text, color="#28a745", variant=None):
+        """Aktualizuje tekst i wariant głównego przycisku zawodów (spójny z motywem)."""
         self.run_comp_btn.setText(text)
-        self.run_comp_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {color};
-                color: white;
-                border: none;
-                padding: 12px 24px;
-                border-radius: 6px;
-                font-size: 16px;
-                font-weight: bold;
-            }}
-            QPushButton:hover {{
-                background-color: {self._get_hover_color(color)};
-            }}
-            QPushButton:pressed {{
-                background-color: {self._get_pressed_color(color)};
-            }}
-        """)
+        # Ustal kolor wg treści przycisku, aby zawsze był spójny
+        normalized = text.strip().lower()
+        if "stop" in normalized:
+            variant = "danger"
+        elif (
+            "rozpocznij i seri" in normalized
+            or "rozpocznij ii seri" in normalized
+            or "rozpocznij 1" in normalized
+            or "rozpocznij 2" in normalized
+        ):
+            variant = "warning"
+        elif "rozpocznij zawody" in normalized:
+            variant = "success"
+        elif "kontynuuj" in normalized:
+            variant = "primary"
+        # Zastosuj wariant QSS tylko dla przycisku — status label sterowany osobno
+        if variant:
+            self.run_comp_btn.setProperty("variant", variant)
+            self.run_comp_btn.setStyleSheet("")
+            # Force button style update
+            self.run_comp_btn.style().unpolish(self.run_comp_btn)
+            self.run_comp_btn.style().polish(self.run_comp_btn)
 
     def _get_hover_color(self, base_color):
         """Zwraca kolor hover na podstawie koloru bazowego"""
@@ -4708,24 +4320,20 @@ class MainWindow(QMainWindow):
         self.competition_status_label.setText(
             "Symulacja zatrzymana. Kliknij 'Kontynuuj' aby wznowić."
         )
-        self.competition_status_label.setStyleSheet("""
-            QLabel {
-                color: #6c757d;
-                font-weight: bold;
-                font-size: 14px;
-                padding: 10px;
-                background-color: rgba(108, 117, 125, 0.1);
-                border-radius: 6px;
-                border-left: 4px solid #6c757d;
-            }
-        """)
-        self._update_competition_button("Kontynuuj", "#007bff")
+        self.competition_status_label.setProperty("chip", True)
+        self.competition_status_label.setProperty("variant", "danger")
+        self.competition_status_label.setStyleSheet("")
+        self._update_competition_button("Kontynuuj", variant="primary")
 
     def _continue_competition(self):
         """Kontynuuje zawody i przywraca przycisk 'Stop'"""
         self.simulation_running = True  # Wznów symulację
-        self._reset_status_label()
-        self._update_competition_button("Stop", "#dc3545")
+        self.competition_status_label.setText("Zawody w toku...")
+        self.competition_status_label.setProperty("chip", True)
+        # W trakcie → zielony
+        self.competition_status_label.setProperty("variant", "success")
+        self.competition_status_label.setStyleSheet("")
+        self._update_competition_button("Stop", variant="danger")
         QTimer.singleShot(500, self._process_next_jumper)
 
     def _start_first_round(self):
@@ -4742,7 +4350,7 @@ class MainWindow(QMainWindow):
         # Aktualizuj informację o serii
         self.round_info_label.setText("Seria: 1/2")
 
-        self._update_competition_button("Stop", "#dc3545")
+        self._update_competition_button("Stop", variant="danger")
         self._reset_status_label()
 
         QTimer.singleShot(500, self._process_next_jumper)
@@ -4764,89 +4372,89 @@ class MainWindow(QMainWindow):
 
             # Miejsce dla top 3
             place_item = QTableWidgetItem()
-            if i == 0:
-                place_item.setText("1")
-                place_item.setBackground(QColor("#FFD700"))
-            elif i == 1:
-                place_item.setText("2")
-                place_item.setBackground(QColor("#C0C0C0"))
-            elif i == 2:
-                place_item.setText("3")
-                place_item.setBackground(QColor("#CD7F32"))
-            else:
-                place_item.setText(str(i + 1))
+            # Bez kolorów tła, tylko tekst i wyrównanie — minimalistycznie
+            place_item.setText(str(i + 1))
             place_item.setTextAlignment(Qt.AlignCenter)
             self.results_table.setItem(i, 0, place_item)
 
-            # Flaga kraju
+            # Flaga kraju – opakowana w bezmarginesowy kontener dla idealnego centrowania
+            flag_pix = self._create_rounded_flag_pixmap(
+                jumper.nationality, size=QSize(24, 16), radius=4
+            )
+            flag_container = QWidget()
+            flag_layout = QHBoxLayout(flag_container)
+            flag_layout.setContentsMargins(0, 0, 0, 0)
+            flag_layout.setSpacing(0)
             flag_label = QLabel()
-            flag_pixmap = self._create_rounded_flag_pixmap(jumper.nationality)
-            if not flag_pixmap.isNull():
-                flag_label.setPixmap(flag_pixmap)
-            flag_label.setScaledContents(True)
+            if not flag_pix.isNull():
+                flag_label.setPixmap(flag_pix)
             flag_label.setAlignment(Qt.AlignCenter)
-            flag_label.setStyleSheet("padding: 4px;")
-            self.results_table.setCellWidget(i, 1, flag_label)
+            flag_layout.addStretch(1)
+            flag_layout.addWidget(flag_label, 0, Qt.AlignCenter)
+            flag_layout.addStretch(1)
+            self.results_table.setCellWidget(i, 1, flag_container)
 
-            # Nazwa zawodnika
+            # Nazwa zawodnika (pogrubiona)
             jumper_item = QTableWidgetItem(str(jumper))
-            jumper_item.setBackground(QColor("#2a2a2a"))
+            f = jumper_item.font()
+            f.setBold(True)
+            jumper_item.setFont(f)
             self.results_table.setItem(i, 2, jumper_item)
 
             # I seria - dystans
             d1_item = QTableWidgetItem()
-            if res["d1"] > 0:
-                d1_item.setText(format_distance_with_unit(res["d1"]))
-                d1_item.setBackground(QColor("#1e3a8a"))
-                d1_item.setForeground(QColor("#ffffff"))
-            else:
-                d1_item.setText("-")
+            d1_item.setText(format_distance_with_unit(res["d1"])) if res[
+                "d1"
+            ] > 0 else d1_item.setText("-")
             d1_item.setTextAlignment(Qt.AlignCenter)
+            f = d1_item.font()
+            f.setBold(True)
+            d1_item.setFont(f)
             self.results_table.setItem(i, 3, d1_item)
 
             # I seria - punkty
             p1_item = QTableWidgetItem()
-            if res["p1"] > 0:
-                p1_item.setText(f"{res['p1']:.1f}")
-                p1_item.setBackground(QColor("#059669"))
-                p1_item.setForeground(QColor("#ffffff"))
-            else:
-                p1_item.setText("-")
+            p1_item.setText(f"{res['p1']:.1f}") if res["p1"] > 0 else p1_item.setText(
+                "-"
+            )
             p1_item.setTextAlignment(Qt.AlignCenter)
+            f = p1_item.font()
+            f.setBold(True)
+            p1_item.setFont(f)
             self.results_table.setItem(i, 4, p1_item)
 
             # II seria - dystans
             d2_item = QTableWidgetItem()
-            if res["d2"] > 0:
-                d2_item.setText(format_distance_with_unit(res["d2"]))
-                d2_item.setBackground(QColor("#1e3a8a"))
-                d2_item.setForeground(QColor("#ffffff"))
-            else:
-                d2_item.setText("-")
+            d2_item.setText(format_distance_with_unit(res["d2"])) if res[
+                "d2"
+            ] > 0 else d2_item.setText("-")
             d2_item.setTextAlignment(Qt.AlignCenter)
+            f = d2_item.font()
+            f.setBold(True)
+            d2_item.setFont(f)
             self.results_table.setItem(i, 5, d2_item)
 
             # II seria - punkty
             p2_item = QTableWidgetItem()
-            if res["p2"] > 0:
-                p2_item.setText(f"{res['p2']:.1f}")
-                p2_item.setBackground(QColor("#059669"))
-                p2_item.setForeground(QColor("#ffffff"))
-            else:
-                p2_item.setText("-")
+            p2_item.setText(f"{res['p2']:.1f}") if res["p2"] > 0 else p2_item.setText(
+                "-"
+            )
             p2_item.setTextAlignment(Qt.AlignCenter)
+            f = p2_item.font()
+            f.setBold(True)
+            p2_item.setFont(f)
             self.results_table.setItem(i, 6, p2_item)
 
-            # Suma punktów
+            # Suma punktów (pogrubiona)
             total_points = res.get("p1", 0) + res.get("p2", 0)
             total_item = QTableWidgetItem()
-            if total_points > 0:
-                total_item.setText(f"{total_points:.1f}")
-                total_item.setBackground(QColor("#dc3545"))
-                total_item.setForeground(QColor("#ffffff"))
-                total_item.setFont(QFont("Arial", 10, QFont.Weight.Bold))
-            else:
-                total_item.setText("-")
+            total_item.setText(
+                f"{total_points:.1f}"
+            ) if total_points > 0 else total_item.setText("-")
+            # Pogrubiony font bez tła
+            f_total = total_item.font()
+            f_total.setBold(True)
+            total_item.setFont(f_total)
             total_item.setTextAlignment(Qt.AlignCenter)
             self.results_table.setItem(i, 7, total_item)
 
@@ -4906,28 +4514,14 @@ class MainWindow(QMainWindow):
     ):
         """Tworzy kartę z podsumowaniem dla pojedynczej serii w widoku sumy punktów."""
         card = QWidget()
-        card.setStyleSheet("""
-            QWidget {
-                background-color: #2a2a2a;
-                border: 1px solid #4a4a4a;
-                border-radius: 8px;
-                padding: 10px;
-                margin: 5px;
-            }
-        """)
+        card.setProperty("class", "card")
 
         layout = QVBoxLayout(card)
         layout.setSpacing(5)
 
         title = QLabel(f"📊 {seria_name}")
-        title.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                font-weight: bold;
-                color: #ffffff;
-                padding: 2px;
-            }
-        """)
+        title.setProperty("chip", True)
+        title.setProperty("variant", "primary")
         title.setAlignment(Qt.AlignCenter)
         layout.addWidget(title)
 
@@ -4939,34 +4533,27 @@ class MainWindow(QMainWindow):
         # Distance
         dist_label = QLabel("Odległość:")
         dist_value = QLabel(format_distance_with_unit(distance))
-        dist_value.setStyleSheet("QLabel { color: #28a745; font-weight: bold; }")
+        dist_value.setProperty("class", "metric")
         details_layout.addRow(dist_label, dist_value)
 
         # Difference from K-point
         diff_label = QLabel("Różnica od K-point:")
         diff_value = QLabel(f"{difference:+.1f} m")
-        diff_value.setStyleSheet("QLabel { color: #0078d4; font-weight: bold; }")
+        diff_value.setProperty("class", "metric")
         details_layout.addRow(diff_label, diff_value)
 
         # Points for distance
         dist_points_label = QLabel("Punkty za odległość:")
         dist_points_value = QLabel(f"{60.0 + (difference * meter_value):.1f} pkt")
-        dist_points_value.setStyleSheet("QLabel { color: #28a745; font-weight: bold; }")
+        dist_points_value.setProperty("chip", True)
+        dist_points_value.setProperty("variant", "success")
         details_layout.addRow(dist_points_label, dist_points_value)
 
         # Total points for series
         total_series_points_label = QLabel("Suma punktów serii:")
         total_series_points_value = QLabel(f"{points:.1f} pkt")
-        total_series_points_value.setStyleSheet("""
-            QLabel {
-                font-size: 14px;
-                font-weight: bold;
-                color: #ffffff;
-                background-color: #059669;
-                border-radius: 4px;
-                padding: 3px;
-            }
-        """)
+        total_series_points_value.setProperty("chip", True)
+        total_series_points_value.setProperty("variant", "success")
         total_series_points_value.setAlignment(Qt.AlignCenter)
         details_layout.addRow(total_series_points_label, total_series_points_value)
 
@@ -5076,21 +4663,64 @@ class JudgePanel:
         Returns:
             Dict z notami sędziów i podsumowaniem
         """
-        # Określ czy lądowanie telemarkiem
-        telemark_chance = self._calculate_telemark_chance(jumper, distance, hill_size)
-        telemark_landing = random.random() < telemark_chance
+        # Nowa logika: losowanie zdarzenia lądowania (upadek / podpórka / ustanie)
+        # Bazowe szanse (do HS): upadek 0.6%, podpórka 0.4%
+        p_fall_base = 0.006
+        p_hand_base = 0.004
 
-        # Noty wszystkich sędziów
+        # Skala ryzyka za HS zależna od Stabilności: f(s) = 1.5 - 0.004*s (0→1.5, 50→1.3, 100→1.1)
+        steps_05m = 0
+        if distance > hill_size:
+            steps_05m = int(math.floor(2 * (distance - hill_size)))
+        stability_val = getattr(jumper, "stability", 50.0) or 50.0
+        factor_per_step = max(1.0, 1.5 - 0.004 * float(stability_val))
+
+        # Odds scaling, by nie przekroczyć 100%
+        r_safe = 1.0
+        r_fall = (p_fall_base / (1.0 - p_fall_base)) * (factor_per_step**steps_05m)
+        r_hand = (p_hand_base / (1.0 - p_hand_base)) * (factor_per_step**steps_05m)
+        Z = r_safe + r_fall + r_hand
+        p_fall = r_fall / Z
+        p_hand = r_hand / Z
+        p_safe = r_safe / Z
+
+        # Wybór zdarzenia
+        rnd = random.random()
+        if rnd < p_fall:
+            event = "fall"
+        elif rnd < p_fall + p_hand:
+            event = "hand"
+        else:
+            event = "safe"
+
         judge_scores = []
-        for judge in self.judges:
-            score = judge.score_jump(
-                jumper, distance, hill_size, telemark_landing, hill
+        if event == "fall":
+            # 5 not: 8–12, zaokrąglenie do 0.5
+            for _ in range(5):
+                val = random.uniform(8.0, 12.0)
+                val = round(val * 2) / 2
+                judge_scores.append(val)
+        elif event == "hand":
+            # 5 not: 11–14, zaokrąglenie do 0.5
+            for _ in range(5):
+                val = random.uniform(11.0, 14.0)
+                val = round(val * 2) / 2
+                judge_scores.append(val)
+        else:
+            # SAFE → wyznacz telemark wg dotychczasowej logiki (nie zmieniamy)
+            telemark_chance = self._calculate_telemark_chance(
+                jumper, distance, hill_size
             )
-            judge_scores.append(score)
+            telemark_landing = random.random() < telemark_chance
+            for judge in self.judges:
+                score = judge.score_jump(
+                    jumper, distance, hill_size, telemark_landing, hill
+                )
+                judge_scores.append(score)
 
         # Usuń najwyższą i najniższą notę
         judge_scores.sort()
-        final_scores = judge_scores[1:-1]  # Usuń pierwszy i ostatni
+        final_scores = judge_scores[1:-1]
 
         # Suma not (bez najwyższej i najniższej)
         total_judge_score = sum(final_scores)
@@ -5099,8 +4729,14 @@ class JudgePanel:
             "all_scores": judge_scores,
             "final_scores": final_scores,
             "total_score": total_judge_score,
-            "telemark_landing": telemark_landing,
-            "telemark_chance": telemark_chance,
+            "event": event,
+            # Jeśli SAFE, dołącz kontekst telemarku (dla spójności UI)
+            "telemark_landing": (event == "safe" and telemark_landing)
+            if "telemark_landing" in locals()
+            else False,
+            "telemark_chance": telemark_chance
+            if "telemark_chance" in locals()
+            else 0.0,
         }
 
     def _calculate_telemark_chance(
@@ -5117,16 +4753,14 @@ class JudgePanel:
         Returns:
             Szansa na telemark (0.0-1.0)
         """
-        # Interpolacja szansy na podstawie telemarku
-        # Telemark 0 → 50% szansy, Telemark 50 → 75% szansy, Telemark 100 → 100% szansy
+        # Interpolacja szansy na podstawie telemarku (50%→100%)
         telemark_factor = jumper.telemark / 100.0
-        base_chance = 0.50 + (telemark_factor * 0.50)  # 50% → 100%
+        base_chance = 0.50 + (telemark_factor * 0.50)
 
-        # Jeśli lądowanie za HS, szansa spada z każdym 0.5 metra o 2.5%
+        # Spadek 2.5 p.p. za każdy pełny 1 m za HS (zgodnie z ustaleniami)
         if distance > hill_size:
-            meters_over_hs = distance - hill_size
-            # Każde 0.5 metra za HS zmniejsza szansę o 2.5%
-            distance_penalty = (meters_over_hs / 0.5) * 0.025
+            meters_over_hs = max(0.0, distance - hill_size)
+            distance_penalty = meters_over_hs * 0.025
             base_chance = max(0.0, base_chance - distance_penalty)
 
         return base_chance
@@ -5135,7 +4769,18 @@ class JudgePanel:
 if __name__ == "__main__":
     app = QApplication(sys.argv)
 
+    app.setStyle("Fusion")
     app.setStyle(CustomProxyStyle())
+
+    # Load minimalist modern QSS theme
+    try:
+        qss_path = resource_path(os.path.join("ui", "styles.qss"))
+        if os.path.exists(qss_path):
+            with open(qss_path, "r", encoding="utf-8") as f:
+                app.setStyleSheet(f.read())
+    except Exception:
+        # Silent fallback to default style if QSS fails to load
+        pass
 
     window = MainWindow()
     window.showMaximized()

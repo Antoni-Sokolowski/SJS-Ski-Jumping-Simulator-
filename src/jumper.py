@@ -29,6 +29,7 @@ class Jumper:
         landing_frontal_area: float = 1,  # Powierzchnia czołowa zawodnika podczas lądowania
         landing_lift_coefficient: float = 0,  # Współczynnik siły nośnej zawodnika podczas lądowania
         telemark: float = 50,  # Umiejętność lądowania telemarkiem (0-100)
+        stability: float = 50,  # Stabilność lądowania (0-100) – wpływa na ryzyko upadku/podpórki za HS
         # --- STATYSTYKI DODATKOWE ---
         timing: float = 50,  # Precyzja timingu wybicia (0-100)
     ):
@@ -51,6 +52,7 @@ class Jumper:
         self.landing_frontal_area = landing_frontal_area
         self.landing_lift_coefficient = landing_lift_coefficient
         self.telemark = telemark
+        self.stability = stability
         self.timing = timing
 
         # Atrybut dla UI - pozycja najazdowa (0-100)
@@ -94,5 +96,6 @@ class Jumper:
             "landing_frontal_area": self.landing_frontal_area,
             "landing_lift_coefficient": self.landing_lift_coefficient,
             "telemark": self.telemark,
+            "stability": self.stability,
             "timing": self.timing,
         }

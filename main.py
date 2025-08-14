@@ -45,7 +45,8 @@ from PySide6.QtCore import (
     QThread,
     Signal as pyqtSignal,
 )
-from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest
+
+# from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest
 from PySide6.QtGui import (
     QIcon,
     QPixmap,
@@ -1263,9 +1264,32 @@ class MainWindow(QMainWindow):
             0, QHeaderView.ResizeToContents
         )
         self.results_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Fixed)
+        # Name column: fixed width to fit ~25 bold characters
+        self.results_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Fixed)
+        # Numeric columns stretch to occupy remaining width nicely
         self.results_table.horizontalHeader().setSectionResizeMode(
-            2, QHeaderView.Stretch
+            3, QHeaderView.Stretch
         )
+        self.results_table.horizontalHeader().setSectionResizeMode(
+            4, QHeaderView.Stretch
+        )
+        self.results_table.horizontalHeader().setSectionResizeMode(
+            5, QHeaderView.Stretch
+        )
+        self.results_table.horizontalHeader().setSectionResizeMode(
+            6, QHeaderView.Stretch
+        )
+        self.results_table.horizontalHeader().setSectionResizeMode(
+            7, QHeaderView.Stretch
+        )
+        # Allow narrow sections so compact modes can actually shrink
+        self.results_table.horizontalHeader().setMinimumSectionSize(24)
+        # Compute and set name column width for ~25 characters (bold font used in cells)
+        name_font = self.results_table.font()
+        name_font.setBold(True)
+        metrics_name = QFontMetrics(name_font)
+        name_col_width = metrics_name.horizontalAdvance("W" * 25) + 20
+        self.results_table.setColumnWidth(2, name_col_width)
         self.results_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.results_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.results_table.cellClicked.connect(self._on_result_cell_clicked)

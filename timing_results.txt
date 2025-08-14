@@ -1,8 +1,0 @@
-Hill: Rasnov K-35 HS38
-Jumper: Aleksander ZNISZCZOŁ
-Results (distance in meters):
-Timing   0 -> mean: 41.60 m, stdev: 2.00, min: 36.58, max: 44.12
-Timing  25 -> mean: 40.57 m, stdev: 2.28, min: 36.58, max: 44.12
-Timing  50 -> mean: 41.56 m, stdev: 1.97, min: 36.59, max: 44.12
-Timing  75 -> mean: 42.03 m, stdev: 1.60, min: 37.36, max: 44.12
-Timing 100 -> mean: 43.39 m, stdev: 0.63, min: 41.22, max: 44.12

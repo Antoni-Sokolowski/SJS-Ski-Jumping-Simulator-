@@ -2,6 +2,7 @@
 
 import sys
 import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QIcon
 from utils.helpers import resource_path

@@ -27,9 +27,9 @@ import matplotlib.animation as animation
 import numpy as np
 import math
 
-from simulation import load_data_from_json, fly_simulation, inrun_simulation
-from jumper import Jumper
-from hill import Hill
+from src.simulation import load_data_from_json, fly_simulation, inrun_simulation
+from src.jumper import Jumper
+from src.hill import Hill
 from ui import AnimatedStackedWidget, NavigationSidebar, ModernComboBox
 from ui.widgets.custom_widgets import (
     CustomProxyStyle,
@@ -1722,7 +1722,7 @@ class MainWindow(QMainWindow):
         current_tab_index = self.editor_tab_widget.currentIndex()
 
         if current_tab_index == 0:  # Skoczkowie
-            from jumper import Jumper
+            from src.jumper import Jumper
 
             new_jumper = Jumper(name="Nowy", last_name="Skoczek", nationality="POL")
             self.all_jumpers.append(new_jumper)
@@ -1735,7 +1735,7 @@ class MainWindow(QMainWindow):
             self._sort_editor_lists(self.editor_sort_combo.currentText())
 
         elif current_tab_index == 1:  # Skocznie
-            from hill import Hill
+            from src.hill import Hill
 
             new_hill = Hill(name="Nowa Skocznia", country="POL", K=90, L=120, gates=10)
             self.all_hills.append(new_hill)

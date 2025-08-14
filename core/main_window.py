@@ -326,6 +326,8 @@ class MainWindow(QMainWindow):
             widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         except Exception:
             pass
+        row.addWidget(widget)
+        return row
 
     def _show_points_breakdown(
         self, jumper, distance, points, seria_num, judge_data=None

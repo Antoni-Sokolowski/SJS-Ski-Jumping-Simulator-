@@ -85,10 +85,10 @@ class TimingIndicatorBar(QWidget):
         self._epsilon_t_s = 0.0
         self._classification = "idealny"
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.setMinimumHeight(34)
+        self.setMinimumHeight(44)
 
     def sizeHint(self):  # noqa: N802 - Qt API
-        return QSize(300, 38)
+        return QSize(300, 48)
 
     def setTiming(self, epsilon_t_s: float, classification: str):  # noqa: N802 - Qt API
         self._epsilon_t_s = float(epsilon_t_s or 0.0)
@@ -121,8 +121,8 @@ class TimingIndicatorBar(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
 
-        # Kompaktowe marginesy zgodne z motywem
-        rect = self.rect().adjusted(8, 6, -8, -6)
+        # Kompaktowe marginesy zgodne z motywem (większy dolny margines na napisy)
+        rect = self.rect().adjusted(8, 6, -8, -14)
 
         # Tło (transparentne, nie rysujemy pełnego panelu żeby było minimalistycznie)
 
@@ -164,12 +164,13 @@ class TimingIndicatorBar(QWidget):
         small_font.setPointSizeF(max(7.5, font.pointSizeF() - 1))
         painter.setFont(small_font)
         painter.setPen(QColor(200, 208, 227, 140))
-        # Obniż podpisy o parę pikseli, aby nie nachodziły na pasek
-        painter.drawText(rect.left(), rect.bottom() + 8, "za wcześnie")
+        # Ustaw podpisy w bezpiecznej strefie wewnątrz widgetu, tuż nad krawędzią
         metrics_small = QFontMetrics(small_font)
+        text_y = self.rect().bottom() - 4
+        painter.drawText(rect.left(), text_y, "za wcześnie")
         painter.drawText(
             rect.right() - metrics_small.horizontalAdvance("za późno"),
-            rect.bottom() + 8,
+            text_y,
             "za późno",
         )
 
@@ -1461,6 +1462,7 @@ class MainWindow(QMainWindow):
             ],
             "Lądowanie": [
                 "telemark",
+                "stability",
             ],
         }
         hill_groups = {
@@ -1494,6 +1496,7 @@ class MainWindow(QMainWindow):
             "flight_style": "Styl lotu skoczka. Normalny = zrównoważony styl. Agresywny = mniejsza powierzchnia czołowa. Pasywny = większa powierzchnia czołowa.",
             "flight_resistance": "Opór powietrza w locie. Wyższe wartości = mniejszy opór aerodynamiczny = dłuższe skoki.",
             "telemark": "Umiejętność lądowania telemarkiem. Wyższe wartości = częstsze i ładniejsze lądowania telemarkiem.",
+            "stability": "Stabilność lądowania. Zmniejsza ryzyko podpórki i upadku daleko za HS.",
             "landing_drag_coefficient": "Opór aerodynamiczny podczas lądowania (bardzo wysoki).",
             "landing_frontal_area": "Powierzchnia czołowa podczas lądowania (największa).",
             "landing_lift_coefficient": "Siła nośna podczas lądowania (zazwyczaj 0).",
@@ -1567,6 +1570,7 @@ class MainWindow(QMainWindow):
                     "flight_technique",
                     "flight_resistance",
                     "telemark",
+                    "stability",
                 ]:
                     widget = CustomSlider()
                     widget.setRange(0, 100)
@@ -1610,6 +1614,8 @@ class MainWindow(QMainWindow):
                     label_text = "Styl lotu:"
                 elif attr == "flight_resistance":
                     label_text = "Opór powietrza:"
+                elif attr == "stability":
+                    label_text = "Stabilność:"
                 else:
                     label_text = (
                         attr.replace("_", " ").replace("deg", "(deg)").capitalize()
@@ -1941,6 +1947,9 @@ class MainWindow(QMainWindow):
                     # Ustaw wartość telemark bezpośrednio (nie fizyczna)
                     telemark_value = getattr(data_obj, "telemark", 50)
                     widget.setValue(int(telemark_value))
+                elif attr == "stability":
+                    stability_value = getattr(data_obj, "stability", 50)
+                    widget.setValue(int(stability_value))
 
                 elif isinstance(widget, QLineEdit):
                     widget.setText(str(value) if value is not None else "")
@@ -2032,6 +2041,10 @@ class MainWindow(QMainWindow):
                     # Zapisz wartość telemark bezpośrednio (nie fizyczna)
                     slider_value = widget.value()
                     setattr(data_obj, "telemark", slider_value)
+                elif attr == "stability":
+                    # Zapisz wartość stabilności bezpośrednio (nie fizyczna)
+                    slider_value = widget.value()
+                    setattr(data_obj, "stability", slider_value)
 
                 elif isinstance(widget, QLineEdit):
                     new_value = widget.text()
@@ -3063,15 +3076,25 @@ class MainWindow(QMainWindow):
         judge_summary.setAlignment(Qt.AlignCenter)
         layout.addWidget(judge_summary)
 
-        # Informacja o lądowaniu
-        landing_info = "Lądowanie: "
-        if judge_data["telemark_landing"]:
-            landing_info += "Telemark ✅"
-        else:
-            landing_info += "Zwykłe"
-
-        landing_label = QLabel(landing_info)
+        # Informacja o lądowaniu (uwzględnia upadek/podpórkę)
+        landing_label = QLabel()
         landing_label.setAlignment(Qt.AlignCenter)
+        landing_label.setProperty("chip", True)
+        event = judge_data.get("event")
+        if event == "fall":
+            landing_label.setText("Lądowanie: Upadek ❌")
+            landing_label.setProperty("variant", "danger")
+        elif event == "hand":
+            landing_label.setText("Lądowanie: Podpórka ❗")
+            landing_label.setProperty("variant", "warning")
+        else:
+            # SAFE – rozróżnij telemark vs zwykłe
+            if judge_data.get("telemark_landing", False):
+                landing_label.setText("Lądowanie: Telemark ✅")
+                landing_label.setProperty("variant", "success")
+            else:
+                landing_label.setText("Lądowanie: Zwykłe")
+                landing_label.setProperty("variant", "primary")
         layout.addWidget(landing_label)
 
         self.points_breakdown_layout.addWidget(card)
@@ -4640,21 +4663,64 @@ class JudgePanel:
         Returns:
             Dict z notami sędziów i podsumowaniem
         """
-        # Określ czy lądowanie telemarkiem
-        telemark_chance = self._calculate_telemark_chance(jumper, distance, hill_size)
-        telemark_landing = random.random() < telemark_chance
+        # Nowa logika: losowanie zdarzenia lądowania (upadek / podpórka / ustanie)
+        # Bazowe szanse (do HS): upadek 0.6%, podpórka 0.4%
+        p_fall_base = 0.006
+        p_hand_base = 0.004
 
-        # Noty wszystkich sędziów
+        # Skala ryzyka za HS zależna od Stabilności: f(s) = 1.5 - 0.004*s (0→1.5, 50→1.3, 100→1.1)
+        steps_05m = 0
+        if distance > hill_size:
+            steps_05m = int(math.floor(2 * (distance - hill_size)))
+        stability_val = getattr(jumper, "stability", 50.0) or 50.0
+        factor_per_step = max(1.0, 1.5 - 0.004 * float(stability_val))
+
+        # Odds scaling, by nie przekroczyć 100%
+        r_safe = 1.0
+        r_fall = (p_fall_base / (1.0 - p_fall_base)) * (factor_per_step**steps_05m)
+        r_hand = (p_hand_base / (1.0 - p_hand_base)) * (factor_per_step**steps_05m)
+        Z = r_safe + r_fall + r_hand
+        p_fall = r_fall / Z
+        p_hand = r_hand / Z
+        p_safe = r_safe / Z
+
+        # Wybór zdarzenia
+        rnd = random.random()
+        if rnd < p_fall:
+            event = "fall"
+        elif rnd < p_fall + p_hand:
+            event = "hand"
+        else:
+            event = "safe"
+
         judge_scores = []
-        for judge in self.judges:
-            score = judge.score_jump(
-                jumper, distance, hill_size, telemark_landing, hill
+        if event == "fall":
+            # 5 not: 8–12, zaokrąglenie do 0.5
+            for _ in range(5):
+                val = random.uniform(8.0, 12.0)
+                val = round(val * 2) / 2
+                judge_scores.append(val)
+        elif event == "hand":
+            # 5 not: 11–14, zaokrąglenie do 0.5
+            for _ in range(5):
+                val = random.uniform(11.0, 14.0)
+                val = round(val * 2) / 2
+                judge_scores.append(val)
+        else:
+            # SAFE → wyznacz telemark wg dotychczasowej logiki (nie zmieniamy)
+            telemark_chance = self._calculate_telemark_chance(
+                jumper, distance, hill_size
             )
-            judge_scores.append(score)
+            telemark_landing = random.random() < telemark_chance
+            for judge in self.judges:
+                score = judge.score_jump(
+                    jumper, distance, hill_size, telemark_landing, hill
+                )
+                judge_scores.append(score)
 
         # Usuń najwyższą i najniższą notę
         judge_scores.sort()
-        final_scores = judge_scores[1:-1]  # Usuń pierwszy i ostatni
+        final_scores = judge_scores[1:-1]
 
         # Suma not (bez najwyższej i najniższej)
         total_judge_score = sum(final_scores)
@@ -4663,8 +4729,14 @@ class JudgePanel:
             "all_scores": judge_scores,
             "final_scores": final_scores,
             "total_score": total_judge_score,
-            "telemark_landing": telemark_landing,
-            "telemark_chance": telemark_chance,
+            "event": event,
+            # Jeśli SAFE, dołącz kontekst telemarku (dla spójności UI)
+            "telemark_landing": (event == "safe" and telemark_landing)
+            if "telemark_landing" in locals()
+            else False,
+            "telemark_chance": telemark_chance
+            if "telemark_chance" in locals()
+            else 0.0,
         }
 
     def _calculate_telemark_chance(
@@ -4681,16 +4753,14 @@ class JudgePanel:
         Returns:
             Szansa na telemark (0.0-1.0)
         """
-        # Interpolacja szansy na podstawie telemarku
-        # Telemark 0 → 50% szansy, Telemark 50 → 75% szansy, Telemark 100 → 100% szansy
+        # Interpolacja szansy na podstawie telemarku (50%→100%)
         telemark_factor = jumper.telemark / 100.0
-        base_chance = 0.50 + (telemark_factor * 0.50)  # 50% → 100%
+        base_chance = 0.50 + (telemark_factor * 0.50)
 
-        # Jeśli lądowanie za HS, szansa spada z każdym 0.5 metra o 2.5%
+        # Spadek 2.5 p.p. za każdy pełny 1 m za HS (zgodnie z ustaleniami)
         if distance > hill_size:
-            meters_over_hs = distance - hill_size
-            # Każde 0.5 metra za HS zmniejsza szansę o 2.5%
-            distance_penalty = (meters_over_hs / 0.5) * 0.025
+            meters_over_hs = max(0.0, distance - hill_size)
+            distance_penalty = meters_over_hs * 0.025
             base_chance = max(0.0, base_chance - distance_penalty)
 
         return base_chance

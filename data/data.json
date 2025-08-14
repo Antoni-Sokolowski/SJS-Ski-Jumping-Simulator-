@@ -2372,6 +2372,7 @@
             "landing_frontal_area": 1.0,
             "landing_lift_coefficient": 0.0,
             "telemark": 81.0,
+            "stability": 77.0,
             "timing": 81.0
         },
         {
@@ -2394,6 +2395,7 @@
             "landing_frontal_area": 1,
             "landing_lift_coefficient": 0,
             "telemark": 87.0,
+            "stability": 86.0,
             "timing": 86.0
         },
         {
@@ -2416,6 +2418,7 @@
             "landing_frontal_area": 1,
             "landing_lift_coefficient": 0,
             "telemark": 97.0,
+            "stability": 90.0,
             "timing": 93.0
         },
         {
@@ -2438,6 +2441,7 @@
             "landing_frontal_area": 1.0,
             "landing_lift_coefficient": 0.0,
             "telemark": 75.0,
+            "stability": 72.0,
             "timing": 77.0
         },
         {
@@ -2460,6 +2464,7 @@
             "landing_frontal_area": 1,
             "landing_lift_coefficient": 0,
             "telemark": 76.0,
+            "stability": 78.0,
             "timing": 79.0
         },
         {
@@ -2482,6 +2487,7 @@
             "landing_frontal_area": 1.0,
             "landing_lift_coefficient": 0.0,
             "telemark": 90.0,
+            "stability": 90.0,
             "timing": 94.0
         },
         {
@@ -2504,6 +2510,7 @@
             "landing_frontal_area": 1.0,
             "landing_lift_coefficient": 0.0,
             "telemark": 84.0,
+            "stability": 85.0,
             "timing": 93.0
         },
         {
@@ -2526,6 +2533,7 @@
             "landing_frontal_area": 1,
             "landing_lift_coefficient": 0,
             "telemark": 85.0,
+            "stability": 88.0,
             "timing": 90.0
         },
         {
@@ -2548,6 +2556,7 @@
             "landing_frontal_area": 1,
             "landing_lift_coefficient": 0,
             "telemark": 85.0,
+            "stability": 85.0,
             "timing": 86.0
         },
         {
@@ -2570,6 +2579,7 @@
             "landing_frontal_area": 1,
             "landing_lift_coefficient": 0,
             "telemark": 83.0,
+            "stability": 84.0,
             "timing": 92.0
         },
         {
@@ -2592,6 +2602,7 @@
             "landing_frontal_area": 1,
             "landing_lift_coefficient": 0,
             "telemark": 86.0,
+            "stability": 85.0,
             "timing": 87.0
         },
         {
@@ -2614,6 +2625,7 @@
             "landing_frontal_area": 1,
             "landing_lift_coefficient": 0,
             "telemark": 96.0,
+            "stability": 95.0,
             "timing": 65.0
         },
         {
@@ -2636,6 +2648,7 @@
             "landing_frontal_area": 1,
             "landing_lift_coefficient": 0,
             "telemark": 89.0,
+            "stability": 88.0,
             "timing": 87.0
         },
         {
@@ -2658,6 +2671,7 @@
             "landing_frontal_area": 1,
             "landing_lift_coefficient": 0,
             "telemark": 79.0,
+            "stability": 72.0,
             "timing": 71.0
         },
         {
@@ -2680,6 +2694,7 @@
             "landing_frontal_area": 1,
             "landing_lift_coefficient": 0,
             "telemark": 82.0,
+            "stability": 79.0,
             "timing": 78.0
         },
         {
@@ -2702,6 +2717,7 @@
             "landing_frontal_area": 1,
             "landing_lift_coefficient": 0,
             "telemark": 86.0,
+            "stability": 80.0,
             "timing": 82.0
         },
         {
@@ -2724,6 +2740,7 @@
             "landing_frontal_area": 1,
             "landing_lift_coefficient": 0,
             "telemark": 82.0,
+            "stability": 82.0,
             "timing": 79.0
         },
         {
@@ -2746,6 +2763,7 @@
             "landing_frontal_area": 1,
             "landing_lift_coefficient": 0,
             "telemark": 87.0,
+            "stability": 87.0,
             "timing": 83.0
         },
         {
@@ -2768,6 +2786,7 @@
             "landing_frontal_area": 1,
             "landing_lift_coefficient": 0,
             "telemark": 83.0,
+            "stability": 78.0,
             "timing": 79.0
         },
         {
@@ -2790,6 +2809,7 @@
             "landing_frontal_area": 1,
             "landing_lift_coefficient": 0,
             "telemark": 80.0,
+            "stability": 81.0,
             "timing": 79.0
         },
         {
@@ -2812,6 +2832,7 @@
             "landing_frontal_area": 1,
             "landing_lift_coefficient": 0,
             "telemark": 89.0,
+            "stability": 92.0,
             "timing": 90.0
         },
         {
@@ -2834,6 +2855,7 @@
             "landing_frontal_area": 1,
             "landing_lift_coefficient": 0,
             "telemark": 78.0,
+            "stability": 82.0,
             "timing": 83.0
         },
         {
@@ -2856,6 +2878,7 @@
             "landing_frontal_area": 1,
             "landing_lift_coefficient": 0,
             "telemark": 88.0,
+            "stability": 83.0,
             "timing": 85.0
         },
         {
@@ -2878,6 +2901,7 @@
             "landing_frontal_area": 1,
             "landing_lift_coefficient": 0,
             "telemark": 88.0,
+            "stability": 83.0,
             "timing": 81.0
         },
         {
@@ -2900,6 +2924,7 @@
             "landing_frontal_area": 1,
             "landing_lift_coefficient": 0,
             "telemark": 91.0,
+            "stability": 90.0,
             "timing": 92.0
         },
         {
@@ -2922,6 +2947,7 @@
             "landing_frontal_area": 1.0,
             "landing_lift_coefficient": 0.0,
             "telemark": 97.0,
+            "stability": 93.0,
             "timing": 94.0
         },
         {
@@ -2944,6 +2970,7 @@
             "landing_frontal_area": 1,
             "landing_lift_coefficient": 0,
             "telemark": 80.0,
+            "stability": 80.0,
             "timing": 84.0
         },
         {
@@ -2966,6 +2993,7 @@
             "landing_frontal_area": 1.0,
             "landing_lift_coefficient": 0.0,
             "telemark": 85.0,
+            "stability": 86.0,
             "timing": 91.0
         },
         {
@@ -2988,6 +3016,7 @@
             "landing_frontal_area": 1,
             "landing_lift_coefficient": 0,
             "telemark": 79.0,
+            "stability": 76.0,
             "timing": 72.0
         },
         {
@@ -3010,6 +3039,7 @@
             "landing_frontal_area": 1,
             "landing_lift_coefficient": 0,
             "telemark": 79.0,
+            "stability": 50,
             "timing": 78.0
         }
     ]

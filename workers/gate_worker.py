@@ -1,7 +1,7 @@
 """Worker thread for calculating recommended gate."""
 
 from PySide6.QtCore import QThread, Signal as pyqtSignal
-from src.simulation import fly_simulation
+from simulation import fly_simulation
 
 
 class RecommendedGateWorker(QThread):

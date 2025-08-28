@@ -5,6 +5,7 @@ import os
 import json
 import copy
 import random
+from datetime import datetime
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -71,6 +72,13 @@ from src.jumper import Jumper
 
 # Removed unused physics constants/helpers imports (kept in simulation modules)
 from ui import AnimatedStackedWidget, NavigationSidebar, ModernComboBox, ModernSlider
+from utils.history_store import (
+    init_db as history_init_db,
+    start_competition as history_start_competition,
+    register_participants as history_register_participants,
+    add_jump as history_add_jump,
+    finalize_competition as history_finalize_competition,
+)
 
 
 class TimingIndicatorBar(QWidget):
@@ -752,7 +760,8 @@ class MainWindow(QMainWindow):
             self.JUMP_REPLAY_IDX,
             self.POINTS_BREAKDOWN_IDX,
             self.SUPPORT_IDX,
-        ) = range(10)
+            self.HISTORY_IDX,
+        ) = range(11)
 
         self.current_theme = "dark"
         self.contrast_level = 1.0
@@ -846,6 +855,7 @@ class MainWindow(QMainWindow):
         self._create_jump_replay_page()
         self._create_points_breakdown_page()
         self._create_support_page()
+        self._create_history_page()
 
         # Map indices to titles
         self.index_to_title = {
@@ -858,6 +868,7 @@ class MainWindow(QMainWindow):
             self.JUMP_REPLAY_IDX: "Powtórka skoku",
             self.POINTS_BREAKDOWN_IDX: "Podział punktów",
             self.SUPPORT_IDX: "Wsparcie",
+            self.HISTORY_IDX: "Historia",
         }
 
         # Build navigation buttons and wire to pages
@@ -870,6 +881,9 @@ class MainWindow(QMainWindow):
         )
         self._nav_btn_comp = self.nav_sidebar.add_nav(
             "Zawody", go(self.COMPETITION_IDX)
+        )
+        self._nav_btn_history = self.nav_sidebar.add_nav(
+            "Historia", go(self.HISTORY_IDX)
         )
         self._nav_btn_editor = self.nav_sidebar.add_nav(
             "Edytor", go(self.DATA_EDITOR_IDX)
@@ -894,36 +908,68 @@ class MainWindow(QMainWindow):
     def _create_main_menu(self):
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        layout.setContentsMargins(50, 30, 50, 50)
-        layout.setSpacing(24)
+        layout.setContentsMargins(40, 30, 40, 40)
+        layout.setSpacing(40)
 
-        # Hero section
+        # Hero section with improved typography
         hero = QVBoxLayout()
-        hero.setSpacing(6)
+        hero.setSpacing(16)
 
         title = QLabel("Ski Jumping Simulator")
         title.setProperty("class", "headerLabel")
         title.setAlignment(Qt.AlignCenter)
         hero.addWidget(title)
 
-        subtitle = QLabel("Wybierz tryb lub przejdź do edytora danych")
+        subtitle = QLabel("Wybierz tryb")
         subtitle.setProperty("role", "subtitle")
         subtitle.setAlignment(Qt.AlignCenter)
         hero.addWidget(subtitle)
 
         layout.addLayout(hero)
 
-        # Cards grid
+        # Cards grid with improved spacing and responsive layout
         grid_container = QWidget()
         grid = QGridLayout(grid_container)
-        grid.setSpacing(16)
+        grid.setSpacing(24)
+        grid.setContentsMargins(0, 0, 0, 0)
 
         def make_card(text, sub, on_click):
-            btn = QPushButton(f"{text}\n{sub}")
-            btn.setProperty("class", "cardButton")
-            btn.setCursor(Qt.PointingHandCursor)
-            btn.clicked.connect(lambda: [self.play_sound(), on_click()])
-            return btn
+            # Create a custom widget container
+            container = QWidget()
+            container.setProperty("class", "cardButton")
+            container.setCursor(Qt.PointingHandCursor)
+            container.setMinimumSize(280, 120)
+            container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+            # Create layout
+            layout = QVBoxLayout(container)
+            layout.setContentsMargins(24, 28, 24, 20)
+            layout.setSpacing(8)
+
+            # Add some top spacing for better symmetry
+            layout.addSpacing(4)
+
+            # Main text label (bold)
+            main_label = QLabel(text)
+            main_label.setProperty("class", "cardMainText")
+            main_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+            main_label.setWordWrap(True)
+
+            # Subtitle label
+            sub_label = QLabel(sub)
+            sub_label.setProperty("class", "cardSubText")
+            sub_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+            sub_label.setWordWrap(True)
+
+            # Add labels to layout
+            layout.addWidget(main_label)
+            layout.addWidget(sub_label)
+            layout.addStretch()
+
+            # Make the entire widget clickable
+            container.mousePressEvent = lambda event: [self.play_sound(), on_click()]
+
+            return container
 
         card_single = make_card(
             "Skok",
@@ -945,11 +991,23 @@ class MainWindow(QMainWindow):
             "Grafika i dźwięk",
             lambda: self.central_widget.setCurrentIndex(self.SETTINGS_IDX),
         )
+        card_history = make_card(
+            "Historia",
+            "Wyniki zapisane lokalnie",
+            lambda: self.central_widget.setCurrentIndex(self.HISTORY_IDX),
+        )
+        card_support = make_card(
+            "Wsparcie",
+            "Kontakt i informacje",
+            lambda: self.central_widget.setCurrentIndex(self.SUPPORT_IDX),
+        )
 
         grid.addWidget(card_single, 0, 0)
         grid.addWidget(card_comp, 0, 1)
         grid.addWidget(card_editor, 1, 0)
-        grid.addWidget(card_settings, 1, 1)
+        grid.addWidget(card_history, 1, 1)
+        grid.addWidget(card_settings, 2, 0)
+        grid.addWidget(card_support, 2, 1)
 
         layout.addWidget(grid_container)
 
@@ -2289,6 +2347,370 @@ class MainWindow(QMainWindow):
         layout.addLayout(main_hbox)
 
         self.central_widget.addWidget(widget)
+
+    def _create_history_page(self):
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(8)
+        layout.setContentsMargins(15, 8, 15, 15)
+
+        layout.addLayout(self._create_top_bar("Historia zawodów", self.MAIN_MENU_IDX))
+
+        # Tabela historii zawodów
+        table = QTableWidget()
+        table.setColumnCount(6)
+        table.setHorizontalHeaderLabels(
+            [
+                "ID",
+                "Nazwa",
+                "Skocznia",
+                "K",
+                "Data",
+                "Typ",
+            ]
+        )
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        table.setSelectionBehavior(QTableWidget.SelectRows)
+        table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.history_table = table
+
+        refresh_btn = QPushButton("Odśwież")
+        refresh_btn.setProperty("variant", "primary")
+        refresh_btn.clicked.connect(self._refresh_history_table)
+
+        layout.addWidget(refresh_btn, 0, Qt.AlignLeft)
+        layout.addWidget(table, 1)
+
+        self.central_widget.addWidget(widget)
+
+        try:
+            self._refresh_history_table()
+        except Exception:
+            pass
+
+        # Single click opens detail
+        self.history_table.itemClicked.connect(self._open_history_detail)
+
+    def _refresh_history_table(self):
+        try:
+            from utils.history_store import list_competitions as _list
+
+            rows = _list(limit=200, offset=0)
+            self.history_table.setRowCount(len(rows))
+            for i, r in enumerate(rows):
+                mode = r.get("mode", "")
+                if "qualification" in mode.lower():
+                    comp_type = "Kwalifikacje"
+                elif "competition" in mode.lower():
+                    comp_type = "Konkurs"
+                else:
+                    comp_type = mode or "Nieznany"
+                values = [
+                    str(r.get("id", "")),
+                    r.get("name", ""),
+                    r.get("hill_name", ""),
+                    f"{float(r.get('k_point') or 0):.0f}",
+                    r.get("created_at", ""),
+                    comp_type,
+                ]
+                for col, val in enumerate(values):
+                    item = QTableWidgetItem(val)
+                    item.setTextAlignment(Qt.AlignCenter)
+                    self.history_table.setItem(i, col, item)
+        except Exception:
+            pass
+
+    def _open_history_detail(self, item: QTableWidgetItem):  # noqa: N802 - Qt slot
+        row = item.row()
+        comp_id_item = self.history_table.item(row, 0)
+        if not comp_id_item:
+            return
+        try:
+            comp_id = int(comp_id_item.text())
+        except Exception:
+            return
+        try:
+            from utils.history_store import get_competition_detail as _detail
+
+            data = _detail(comp_id)
+        except Exception:
+            return
+
+        if not data:
+            return
+
+        # Build a simple detail page similar to competition results
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(10)
+        layout.setContentsMargins(15, 8, 15, 15)
+
+        # Determine competition type
+        comp_mode = data["competition"].get("mode", "")
+        is_qualification = "qualification" in comp_mode.lower()
+        type_label = "Kwalifikacje" if is_qualification else "Konkurs"
+        title = QLabel(f"Wyniki: {type_label}")
+        title.setProperty("class", "headerLabel")
+        title.setAlignment(Qt.AlignCenter)
+        layout.addLayout(self._create_top_bar("Historia: wyniki", self.HISTORY_IDX))
+        layout.addWidget(title)
+
+        # Determine competition type
+        comp_mode = data["competition"].get("mode", "")
+        is_qualification = "qualification" in comp_mode.lower()
+
+        table = QTableWidget()
+        if is_qualification:
+            table.setColumnCount(5)
+            table.setHorizontalHeaderLabels(
+                [
+                    "Miejsce",
+                    "Flaga",
+                    "Zawodnik",
+                    "Dystans",
+                    "Punkty",
+                ]
+            )
+        else:
+            table.setColumnCount(8)
+            table.setHorizontalHeaderLabels(
+                [
+                    "Miejsce",
+                    "Flaga",
+                    "Zawodnik",
+                    "I seria",
+                    "I seria (pkt)",
+                    "II seria",
+                    "II seria (pkt)",
+                    "Suma (pkt)",
+                ]
+            )
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
+        # Reconstruct per-jumper aggregates
+        results_map = {}
+        rounds = data.get("rounds", [])
+
+        for r in rounds:
+            ri = int(r.get("round_index") or 0)
+            for j in r.get("jumps", []):
+                key = (
+                    j.get("name", ""),
+                    j.get("last_name", ""),
+                    j.get("country_code", ""),
+                )
+                if key not in results_map:
+                    results_map[key] = {
+                        "name": key[0],
+                        "last": key[1],
+                        "country": key[2],
+                        "d1": 0.0,
+                        "p1": 0.0,
+                        "d2": 0.0,
+                        "p2": 0.0,
+                        "judges1": None,
+                        "judges2": None,
+                    }
+                entry = results_map[key]
+                distance = float(j.get("distance") or 0.0)
+                total_points = float(j.get("total_points") or 0.0)
+                notes = j.get("notes_json")
+                if ri == 1:
+                    entry["d1"] = distance
+                    entry["p1"] = total_points
+                    entry["judges1"] = notes
+                elif ri == 2:
+                    entry["d2"] = distance
+                    entry["p2"] = total_points
+                    entry["judges2"] = notes
+
+        results = list(results_map.values())
+        # Sort like competition: by p1 in round 1; by p1+p2 in round 2 or final
+        if is_qualification:
+            # For qualification, sort by points (only one round)
+            results.sort(key=lambda x: x.get("p1", 0), reverse=True)
+        elif any(e.get("d2", 0) > 0 for e in results):
+            results.sort(key=lambda x: (x.get("p1", 0) + x.get("p2", 0)), reverse=True)
+        else:
+            results.sort(key=lambda x: x.get("p1", 0), reverse=True)
+
+        table.setRowCount(len(results))
+        # k_point can be used for derived metrics if needed in the future
+        for i, res in enumerate(results):
+            place_item = QTableWidgetItem(str(i + 1))
+            place_item.setTextAlignment(Qt.AlignCenter)
+            table.setItem(i, 0, place_item)
+
+            # Flag
+            flag_container = QWidget()
+            flag_layout = QHBoxLayout(flag_container)
+            flag_layout.setContentsMargins(0, 0, 0, 0)
+            flag_layout.setSpacing(0)
+            flag_label = QLabel()
+            pix = self._create_rounded_flag_pixmap(
+                res["country"], size=QSize(24, 16), radius=4
+            )
+            if not pix.isNull():
+                flag_label.setPixmap(pix)
+            flag_label.setAlignment(Qt.AlignCenter)
+            flag_layout.addStretch(1)
+            flag_layout.addWidget(flag_label, 0, Qt.AlignCenter)
+            flag_layout.addStretch(1)
+            table.setCellWidget(i, 1, flag_container)
+
+            # Name
+            name_item = QTableWidgetItem(f"{res['name']} {res['last']}")
+            f = name_item.font()
+            f.setBold(True)
+            name_item.setFont(f)
+            table.setItem(i, 2, name_item)
+
+            def _set_cell(col, text):
+                it = QTableWidgetItem(text)
+                it.setTextAlignment(Qt.AlignCenter)
+                table.setItem(i, col, it)
+
+            if is_qualification:
+                # Qualification: single round
+                d1 = res.get("d1", 0.0)
+                p1 = res.get("p1", 0.0)
+                _set_cell(3, f"{d1:.1f} m" if d1 > 0 else "-")
+                _set_cell(4, f"{p1:.1f}" if p1 > 0 else "-")
+            else:
+                # Competition: two rounds
+                d1 = res.get("d1", 0.0)
+                p1 = res.get("p1", 0.0)
+                d2 = res.get("d2", 0.0)
+                p2 = res.get("p2", 0.0)
+                _set_cell(3, f"{d1:.1f} m" if d1 > 0 else "-")
+                _set_cell(4, f"{p1:.1f}" if p1 > 0 else "-")
+                _set_cell(5, f"{d2:.1f} m" if d2 > 0 else "-")
+                _set_cell(6, f"{p2:.1f}" if p2 > 0 else "-")
+                total = (p1 + p2) if (p1 or p2) else 0.0
+                _set_cell(7, f"{total:.1f}" if total > 0 else "-")
+
+        layout.addWidget(table)
+
+        # Store context for click handling
+        self.history_detail_table = table
+        self._history_detail_is_qualification = is_qualification
+        self._history_detail_results = results
+        self._history_detail_hill_name = data["competition"].get("hill_name", "")
+        self._history_detail_gate = getattr(self, "competition_gate", None)
+        self.history_detail_table.itemClicked.connect(
+            self._on_history_detail_cell_clicked
+        )
+
+        # Navigate to this detail page
+        self.central_widget.addWidget(widget)
+        self.central_widget.setCurrentWidget(widget)
+
+    def _on_history_detail_cell_clicked(self, item: QTableWidgetItem):
+        try:
+            row = item.row()
+            col = item.column()
+            results = getattr(self, "_history_detail_results", [])
+            if row < 0 or row >= len(results):
+                return
+            res = results[row]
+            # Resolve hill by name
+            hill_name = getattr(self, "_history_detail_hill_name", "")
+            hill = next(
+                (h for h in self.all_hills if getattr(h, "name", None) == hill_name),
+                None,
+            )
+            hill = hill or getattr(self, "competition_hill", None)
+            if hill is None:
+                return
+            gate = (
+                getattr(self, "_history_detail_gate", None)
+                or getattr(self, "competition_gate", None)
+                or hill.gates
+            )
+
+            if getattr(self, "_history_detail_is_qualification", False):
+                # distance in col 3, points in col 4
+                if col == 3 and res.get("d1", 0) > 0:
+                    # replay
+                    # Find a representative jumper-like object: we only have name/last, so use matching from all_jumpers if possible
+                    jumper = next(
+                        (
+                            j
+                            for j in self.all_jumpers
+                            if j.name == res["name"] and j.last_name == res["last"]
+                        ),
+                        None,
+                    )
+                    jumper = jumper or Jumper(
+                        res["name"], res["last"], nationality=res.get("country")
+                    )
+                    self._show_jump_replay(jumper, hill, gate, res.get("d1", 0.0), "Q")
+                elif col == 4 and res.get("p1", 0) > 0:
+                    # points breakdown
+                    distance = res.get("d1", 0.0)
+                    points = res.get("p1", 0.0)
+                    judge = res.get("judges1")
+                    jumper = next(
+                        (
+                            j
+                            for j in self.all_jumpers
+                            if j.name == res["name"] and j.last_name == res["last"]
+                        ),
+                        None,
+                    )
+                    jumper = jumper or Jumper(
+                        res["name"], res["last"], nationality=res.get("country")
+                    )
+                    self._show_points_breakdown(jumper, distance, points, "Q", judge)
+                return
+
+            # Competition: series 1 (cols 3,4), series 2 (cols 5,6)
+            if col in (3, 4) and (res.get("d1", 0) > 0 or res.get("p1", 0) > 0):
+                jumper = next(
+                    (
+                        j
+                        for j in self.all_jumpers
+                        if j.name == res["name"] and j.last_name == res["last"]
+                    ),
+                    None,
+                )
+                jumper = jumper or Jumper(
+                    res["name"], res["last"], nationality=res.get("country")
+                )
+                if col == 3 and res.get("d1", 0) > 0:
+                    self._show_jump_replay(jumper, hill, gate, res.get("d1", 0.0), 1)
+                elif col == 4 and res.get("p1", 0) > 0:
+                    self._show_points_breakdown(
+                        jumper,
+                        res.get("d1", 0.0),
+                        res.get("p1", 0.0),
+                        1,
+                        res.get("judges1"),
+                    )
+            elif col in (5, 6) and (res.get("d2", 0) > 0 or res.get("p2", 0) > 0):
+                jumper = next(
+                    (
+                        j
+                        for j in self.all_jumpers
+                        if j.name == res["name"] and j.last_name == res["last"]
+                    ),
+                    None,
+                )
+                jumper = jumper or Jumper(
+                    res["name"], res["last"], nationality=res.get("country")
+                )
+                if col == 5 and res.get("d2", 0) > 0:
+                    self._show_jump_replay(jumper, hill, gate, res.get("d2", 0.0), 2)
+                elif col == 6 and res.get("p2", 0) > 0:
+                    self._show_points_breakdown(
+                        jumper,
+                        res.get("d2", 0.0),
+                        res.get("p2", 0.0),
+                        2,
+                        res.get("judges2"),
+                    )
+        except Exception:
+            pass
 
     def _create_support_page(self):
         widget = QWidget()
@@ -3909,6 +4331,64 @@ class MainWindow(QMainWindow):
         self.results_table.setRowCount(len(self.competition_results))
         self._update_competition_table()
 
+        # INIT history DB and create history records
+        try:
+            history_init_db()
+            hill_name = getattr(self.competition_hill, "name", "")
+            # If qualifications enabled, create a dedicated qualification record now
+            if self.qualification_enabled:
+                qual_name = f"Kwalifikacje {hill_name} {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+                self._history_qualification_id = history_start_competition(
+                    name=qual_name,
+                    hill_id=str(hill_name),
+                    hill_name=hill_name,
+                    k_point=float(getattr(self.competition_hill, "K", 0.0)),
+                    hs_point=float(getattr(self.competition_hill, "L", 0.0)),
+                    mode="qualification",
+                    app_version=None,
+                )
+                participants = [
+                    (
+                        getattr(j, "name", ""),
+                        getattr(j, "last_name", ""),
+                        getattr(j, "nationality", None),
+                    )
+                    for j in self.selection_order
+                ]
+                history_register_participants(
+                    self._history_qualification_id, participants
+                )
+                # Delay competition record creation until first round actually starts
+                self._history_competition_id = None
+            else:
+                comp_name = (
+                    f"Zawody {hill_name} {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+                )
+                self._history_competition_id = history_start_competition(
+                    name=comp_name,
+                    hill_id=str(hill_name),
+                    hill_name=hill_name,
+                    k_point=float(getattr(self.competition_hill, "K", 0.0)),
+                    hs_point=float(getattr(self.competition_hill, "L", 0.0)),
+                    mode="competition",
+                    app_version=None,
+                )
+                participants = [
+                    (
+                        getattr(j, "name", ""),
+                        getattr(j, "last_name", ""),
+                        getattr(j, "nationality", None),
+                    )
+                    for j in self.selection_order
+                ]
+                history_register_participants(
+                    self._history_competition_id, participants
+                )
+        except Exception:
+            # Silent fail to avoid disturbing UI; history is optional
+            self._history_competition_id = None
+            self._history_qualification_id = None
+
         # Lepszy komunikat rozpoczęcia
         if self.qualification_enabled:
             status_text = f"Rozpoczynanie kwalifikacji na {self.competition_hill.name}... ({len(self.selection_order)} zawodników)"
@@ -3944,6 +4424,11 @@ class MainWindow(QMainWindow):
             # Logika kwalifikacji
             if self.current_qualification_jumper_index >= len(self.qualification_order):
                 # Koniec kwalifikacji - przejdź do konkursu
+                try:
+                    if getattr(self, "_history_qualification_id", None):
+                        history_finalize_competition(self._history_qualification_id)
+                except Exception:
+                    pass
                 self._finish_qualification()
                 return
 
@@ -3997,6 +4482,26 @@ class MainWindow(QMainWindow):
 
                 # Aktualizuj tabelę wyników kwalifikacji
                 self._update_qualification_table()
+
+                # Save to history (qualification record)
+                try:
+                    if getattr(self, "_history_qualification_id", None):
+                        history_add_jump(
+                            competition_id=self._history_qualification_id,
+                            round_index=1,
+                            jumper=jumper,
+                            order_index=int(
+                                self.current_qualification_jumper_index + 1
+                            ),
+                            distance=float(distance),
+                            total_points=float(total_points),
+                            judge_data=judge_scores,
+                            wind_points=None,
+                            gate_points=None,
+                            timing_info=getattr(jumper, "last_timing_info", None),
+                        )
+                except Exception:
+                    pass
 
                 # Następny skoczek po krótkiej przerwie
                 QTimer.singleShot(150, self._process_next_jumper)
@@ -4062,6 +4567,13 @@ class MainWindow(QMainWindow):
                 )
                 self._update_competition_table()
 
+                # finalize competition in history
+                try:
+                    if getattr(self, "_history_competition_id", None):
+                        history_finalize_competition(self._history_competition_id)
+                except Exception:
+                    pass
+
                 # Przywróć przycisk do stanu początkowego na końcu zawodów
                 self._update_competition_button("Rozpocznij zawody", variant="success")
             return
@@ -4116,6 +4628,24 @@ class MainWindow(QMainWindow):
             total_jumpers = len(self.competition_order)
             progress = (self.current_jumper_index / total_jumpers) * 100
             self.progress_label.setText(f"Postęp: {progress:.0f}%")
+
+        # Save jump to history
+        try:
+            if getattr(self, "_history_competition_id", None):
+                history_add_jump(
+                    competition_id=self._history_competition_id,
+                    round_index=int(self.current_round),
+                    jumper=jumper,
+                    order_index=int(self.current_jumper_index),
+                    distance=float(distance),
+                    total_points=float(total_points),
+                    judge_data=judge_scores,
+                    wind_points=None,
+                    gate_points=None,
+                    timing_info=getattr(jumper, "last_timing_info", None),
+                )
+        except Exception:
+            pass
 
         QTimer.singleShot(150, self._process_next_jumper)
 
@@ -4373,6 +4903,37 @@ class MainWindow(QMainWindow):
 
         # Aktualizuj informację o serii
         self.round_info_label.setText("Seria: 1/2")
+
+        # Ensure competition history record is created now (finalists as participants)
+        try:
+            if getattr(self, "_history_competition_id", None) is None:
+                hill_name = getattr(self.competition_hill, "name", "")
+                comp_name = (
+                    f"Zawody {hill_name} {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+                )
+                self._history_competition_id = history_start_competition(
+                    name=comp_name,
+                    hill_id=str(hill_name),
+                    hill_name=hill_name,
+                    k_point=float(getattr(self.competition_hill, "K", 0.0)),
+                    hs_point=float(getattr(self.competition_hill, "L", 0.0)),
+                    mode="competition",
+                    app_version=None,
+                )
+                # Register only finalists/current competition order
+                participants = [
+                    (
+                        getattr(j, "name", ""),
+                        getattr(j, "last_name", ""),
+                        getattr(j, "nationality", None),
+                    )
+                    for j in self.competition_order
+                ]
+                history_register_participants(
+                    self._history_competition_id, participants
+                )
+        except Exception:
+            pass
 
         self._update_competition_button("Stop", variant="danger")
         self._reset_status_label()

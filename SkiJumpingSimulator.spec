@@ -1,12 +1,20 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+
+# Collect additional data files and plugins
+_mpl_datas = collect_data_files('matplotlib')
+# Comprehensive PySide6 hidden imports (widgets, multimedia, etc.)
+_pyside6_modules = collect_submodules('PySide6')
+
 
 a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('assets', 'assets'), ('data', 'data'), ('ui', 'ui')],
-    hiddenimports=['PySide6', 'PySide6.QtCore', 'PySide6.QtGui', 'PySide6.QtWidgets'],
+    # Do NOT bundle external 'assets' and 'data' (keep them next to the exe for onefile)
+    datas=_mpl_datas,
+    hiddenimports=['PySide6', 'PySide6.QtCore', 'PySide6.QtGui', 'PySide6.QtWidgets', 'PySide6.QtMultimedia', 'matplotlib.backends.backend_qt5agg', 'PIL.Image', 'PIL.ImageFilter', 'PIL.ImageDraw'] + _pyside6_modules,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

@@ -55,9 +55,10 @@ QLabel[role="title"] {
 }
 
 QLabel[role="subtitle"] {
-    font-size: 13pt;
-    font-weight: 600;
-    color: #cfd5e3;
+    font-size: 15pt;
+    font-weight: 500;
+    color: #b9bfcc;
+    opacity: 0.9;
 }
 
 QLabel[role="meta"] {
@@ -67,8 +68,9 @@ QLabel[role="meta"] {
 
 QLabel[class="headerLabel"] {
     color: #e8eaf1;
-    font-size: 22pt;
-    font-weight: 600;
+    font-size: 32pt;
+    font-weight: 800;
+    letter-spacing: -1px;
 }
 
 /* Start page cards */
@@ -76,13 +78,52 @@ QLabel[class="headerLabel"] {
 QPushButton[class="cardButton"] {
     background: #11141a;
     border: 1px solid #1e2430;
-    border-radius: 12px;
+    border-radius: 16px;
     color: #e8eaf1;
     text-align: left;
-    padding: 16px 18px;
+    padding: 20px 24px;
     padding-right: 56px; /* miejsce na ikonę po prawej */
-    min-width: 220px;
-    min-height: 84px;
+    min-width: 240px;
+    min-height: 100px;
+    line-height: 1.5;
+    font-size: 11pt;
+    font-weight: 500;
+}
+
+/* Card-style widgets (QWidget) */
+QWidget[class="cardButton"] {
+    background: linear-gradient(135deg, #11141a 0%, #151a23 100%);
+    border: 1px solid #1e2430;
+    border-radius: 20px;
+    color: #e8eaf1;
+}
+
+QWidget[class="cardButton"]:hover {
+    background: linear-gradient(135deg, #151a23 0%, #1a2230 100%);
+    border-color: #2a3550;
+}
+
+QWidget[class="cardButton"]:pressed {
+    background: linear-gradient(135deg, #0f131a 0%, #141a22 100%);
+}
+
+            /* Card text styling */
+            QLabel[class="cardMainText"] {
+                color: #e8eaf1;
+                font-size: 16pt;
+                font-weight: 600;
+                margin: 0;
+                padding: 0;
+                letter-spacing: -0.2px;
+            }
+
+QLabel[class="cardSubText"] {
+    color: #b9bfcc;
+    font-size: 12pt;
+    font-weight: 500;
+    margin: 0;
+    padding: 0;
+    opacity: 0.85;
     line-height: 1.4;
 }
 

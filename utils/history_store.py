@@ -369,6 +369,57 @@ def clear_history() -> None:
         cur.execute("DELETE FROM jumpers")
         cur.execute("DELETE FROM competitions")
         cur.execute("DELETE FROM meta")
+        # Reset SQLite sequence to start from 1 again
+        cur.execute("DELETE FROM sqlite_sequence WHERE name='competitions'")
         conn.commit()
+    finally:
+        conn.close()
+
+
+def update_competition_name(competition_id: int, new_name: str) -> bool:
+    """Update the name of a competition"""
+    conn = _connect()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE competitions SET name=? WHERE id=?",
+            (new_name, competition_id),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def delete_competition(competition_id: int) -> bool:
+    """Delete a specific competition and all its related data"""
+    conn = _connect()
+    try:
+        cur = conn.cursor()
+
+        # Get round IDs for this competition
+        cur.execute("SELECT id FROM rounds WHERE competition_id=?", (competition_id,))
+        round_ids = [row[0] for row in cur.fetchall()]
+
+        # Delete jumps for all rounds of this competition
+        if round_ids:
+            placeholders = ",".join("?" * len(round_ids))
+            cur.execute(
+                f"DELETE FROM jumps WHERE round_id IN ({placeholders})", round_ids
+            )
+
+        # Delete rounds
+        cur.execute("DELETE FROM rounds WHERE competition_id=?", (competition_id,))
+
+        # Delete competition jumpers
+        cur.execute(
+            "DELETE FROM competition_jumpers WHERE competition_id=?", (competition_id,)
+        )
+
+        # Delete the competition
+        cur.execute("DELETE FROM competitions WHERE id=?", (competition_id,))
+
+        conn.commit()
+        return cur.rowcount > 0
     finally:
         conn.close()

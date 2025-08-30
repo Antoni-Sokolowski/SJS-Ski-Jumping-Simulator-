@@ -882,11 +882,11 @@ class MainWindow(QMainWindow):
         self._nav_btn_comp = self.nav_sidebar.add_nav(
             "Zawody", go(self.COMPETITION_IDX)
         )
-        self._nav_btn_history = self.nav_sidebar.add_nav(
-            "Historia", go(self.HISTORY_IDX)
-        )
         self._nav_btn_editor = self.nav_sidebar.add_nav(
             "Edytor", go(self.DATA_EDITOR_IDX)
+        )
+        self._nav_btn_history = self.nav_sidebar.add_nav(
+            "Historia", go(self.HISTORY_IDX)
         )
         # Ustawienia w pasku bocznym
         self._nav_btn_settings = self.nav_sidebar.add_nav(
@@ -2249,7 +2249,19 @@ class MainWindow(QMainWindow):
         layout.setSpacing(6)
         layout.setContentsMargins(15, 8, 15, 15)
 
-        layout.addLayout(self._create_top_bar("Powtórka skoku", self.COMPETITION_IDX))
+        # Create dynamic back button that checks context
+        back_btn = QPushButton("← Wróć")
+        back_btn.clicked.connect(self._jump_replay_back_navigation)
+        back_btn.setFixedHeight(36)
+        back_btn.setObjectName("backArrowButton")
+
+        top_bar = QHBoxLayout()
+        top_bar.setContentsMargins(0, 0, 0, 0)
+        top_bar.setSpacing(12)
+        top_bar.addWidget(back_btn, 0, Qt.AlignLeft)
+        top_bar.addStretch()
+
+        layout.addLayout(top_bar)
 
         self.replay_title_label = QLabel("Imię i nazwisko skoczka")
         self.replay_title_label.setProperty("role", "title")
@@ -2284,7 +2296,19 @@ class MainWindow(QMainWindow):
         layout.setSpacing(8)
         layout.setContentsMargins(15, 8, 15, 15)
 
-        layout.addLayout(self._create_top_bar("Podział punktów", self.COMPETITION_IDX))
+        # Create dynamic back button that checks context
+        back_btn = QPushButton("← Wróć")
+        back_btn.clicked.connect(self._points_breakdown_back_navigation)
+        back_btn.setFixedHeight(36)
+        back_btn.setObjectName("backArrowButton")
+
+        top_bar = QHBoxLayout()
+        top_bar.setContentsMargins(0, 0, 0, 0)
+        top_bar.setSpacing(12)
+        top_bar.addWidget(back_btn, 0, Qt.AlignLeft)
+        top_bar.addStretch()
+
+        layout.addLayout(top_bar)
 
         # Hill information at the top
         self.points_hill_info_group = QGroupBox("Informacje o skoczni")
@@ -2358,7 +2382,7 @@ class MainWindow(QMainWindow):
 
         # Tabela historii zawodów
         table = QTableWidget()
-        table.setColumnCount(6)
+        table.setColumnCount(7)
         table.setHorizontalHeaderLabels(
             [
                 "ID",
@@ -2367,11 +2391,45 @@ class MainWindow(QMainWindow):
                 "K",
                 "Data",
                 "Typ",
+                "Akcje",
             ]
         )
-        table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
+        # Ustaw szerokości kolumn
+        table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.Fixed
+        )  # ID - wąska
+        table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.Stretch
+        )  # Nazwa - rozciąga się, aby wypełnić pozostałą przestrzeń
+        table.horizontalHeader().setSectionResizeMode(
+            2, QHeaderView.Fixed
+        )  # Skocznia - wąska, tylko dla nazw jak "Garmisch-Partenkirchen"
+        table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Fixed)  # K
+        table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Fixed)  # Data
+        table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Fixed)  # Typ
+        table.horizontalHeader().setSectionResizeMode(6, QHeaderView.Fixed)  # Akcje
+
+        # Ustaw szerokości kolumn (tylko dla kolumn z Fixed mode)
+        table.setColumnWidth(0, 50)  # ID - wąska
+        table.setColumnWidth(
+            2, 200
+        )  # Skocznia - szersza dla nazw jak "Garmisch-Partenkirchen"
+        table.setColumnWidth(3, 60)  # K
+        table.setColumnWidth(4, 160)  # Data - szersza dla pełnej daty z godziną
+        table.setColumnWidth(5, 100)  # Typ
+        table.setColumnWidth(6, 160)  # Akcje - szersza dla przycisków z tekstem
+
+        # Ustaw wysokość wierszy
+        table.verticalHeader().setDefaultSectionSize(
+            50
+        )  # Znacznie większa wysokość dla przycisków
+
         table.setSelectionBehavior(QTableWidget.SelectRows)
-        table.setEditTriggers(QTableWidget.NoEditTriggers)
+        table.setEditTriggers(
+            QTableWidget.DoubleClicked
+        )  # Włącz edycję przez podwójne kliknięcie
+        table.itemChanged.connect(self._on_history_item_changed)  # Obsługa zmiany nazwy
         self.history_table = table
 
         refresh_btn = QPushButton("Odśwież")
@@ -2388,8 +2446,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-        # Single click opens detail
-        self.history_table.itemClicked.connect(self._open_history_detail)
+        # Usunięto kliknięcie na wiersz - wyniki dostępne tylko przez przycisk
 
     def _refresh_history_table(self):
         try:
@@ -2405,20 +2462,190 @@ class MainWindow(QMainWindow):
                     comp_type = "Konkurs"
                 else:
                     comp_type = mode or "Nieznany"
+                # Format date - remove T and replace with space
+                created_at = r.get("created_at", "")
+                if "T" in created_at:
+                    created_at = created_at.replace("T", " ")
+
                 values = [
                     str(r.get("id", "")),
                     r.get("name", ""),
                     r.get("hill_name", ""),
                     f"{float(r.get('k_point') or 0):.0f}",
-                    r.get("created_at", ""),
+                    created_at,
                     comp_type,
                 ]
                 for col, val in enumerate(values):
                     item = QTableWidgetItem(val)
                     item.setTextAlignment(Qt.AlignCenter)
+
+                    # Włącz edycję tylko dla kolumny "Nazwa" (kolumna 1)
+                    if col == 1:  # Kolumna "Nazwa"
+                        item.setFlags(item.flags() | Qt.ItemIsEditable)
+                    else:
+                        item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+
                     self.history_table.setItem(i, col, item)
+
+                # Dodaj przyciski akcji w ostatniej kolumnie
+                actions_widget = QWidget()
+                actions_layout = QHBoxLayout(actions_widget)
+                actions_layout.setContentsMargins(
+                    4, 4, 4, 12
+                )  # Jeszcze wyżej (mniej góra, więcej dół)
+                actions_layout.setSpacing(6)
+
+                # Przycisk "Pokaż wyniki"
+                show_results_btn = QPushButton("Wyniki")
+                show_results_btn.setProperty("variant", "primary")
+                show_results_btn.setStyleSheet("""
+                    QPushButton {
+                        font-size: 12px;
+                        font-weight: 600;
+                        border-radius: 6px;
+                        padding: 4px 6px;
+                        min-height: 26px;
+                        max-height: 26px;
+                        border: 1px solid #3b82f6;
+                        background-color: #3b82f6;
+                        color: white;
+                    }
+                    QPushButton:hover {
+                        background-color: #2563eb;
+                        border-color: #2563eb;
+                    }
+                    QPushButton:pressed {
+                        background-color: #1d4ed8;
+                        border-color: #1d4ed8;
+                    }
+                """)
+                show_results_btn.setToolTip("Pokaż wyniki")
+                show_results_btn.clicked.connect(
+                    lambda checked, row_idx=i: [
+                        self.play_sound(),
+                        self._show_history_results(row_idx),
+                    ]
+                )
+
+                # Przycisk "Usuń"
+                delete_btn = QPushButton("Usuń")
+                delete_btn.setProperty("variant", "danger")
+                delete_btn.setStyleSheet("""
+                    QPushButton {
+                        font-size: 12px;
+                        font-weight: 600;
+                        border-radius: 6px;
+                        padding: 4px 6px;
+                        min-height: 26px;
+                        max-height: 26px;
+                        border: 1px solid #ef4444;
+                        background-color: #ef4444;
+                        color: white;
+                    }
+                    QPushButton:hover {
+                        background-color: #dc2626;
+                        border-color: #dc2626;
+                    }
+                    QPushButton:pressed {
+                        background-color: #b91c1c;
+                        border-color: #b91c1c;
+                    }
+                """)
+                delete_btn.setToolTip("Usuń rekord")
+                delete_btn.clicked.connect(
+                    lambda checked, row_idx=i: [
+                        self.play_sound(),
+                        self._delete_history_record(row_idx),
+                    ]
+                )
+
+                actions_layout.addWidget(show_results_btn, 1)
+                actions_layout.addWidget(delete_btn, 1)
+
+                self.history_table.setCellWidget(i, 6, actions_widget)
         except Exception:
             pass
+
+    def _show_history_results(self, row_idx: int):
+        """Pokazuje szczegółowe wyniki dla wybranego rekordu historii"""
+        comp_id_item = self.history_table.item(row_idx, 0)
+        if not comp_id_item:
+            return
+        try:
+            comp_id = int(comp_id_item.text())
+        except Exception:
+            return
+
+        # Użyj istniejącej funkcji _open_history_detail
+        self._open_history_detail(comp_id_item)
+
+    def _delete_history_record(self, row_idx: int):
+        """Usuwa rekord z historii"""
+        comp_id_item = self.history_table.item(row_idx, 0)
+        if not comp_id_item:
+            return
+        try:
+            comp_id = int(comp_id_item.text())
+        except Exception:
+            return
+
+        # Potwierdzenie usunięcia
+        reply = QMessageBox.question(
+            self,
+            "Potwierdzenie usunięcia",
+            "Czy na pewno chcesz usunąć ten rekord z historii?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+
+        if reply == QMessageBox.Yes:
+            try:
+                from utils.history_store import delete_competition
+
+                if delete_competition(comp_id):
+                    # Odśwież tabelę
+                    self._refresh_history_table()
+                    QMessageBox.information(
+                        self, "Sukces", "Rekord został usunięty z historii."
+                    )
+                else:
+                    QMessageBox.warning(self, "Błąd", "Nie udało się usunąć rekordu.")
+            except Exception as e:
+                QMessageBox.critical(
+                    self, "Błąd", f"Wystąpił błąd podczas usuwania: {str(e)}"
+                )
+
+    def _on_history_item_changed(self, item: QTableWidgetItem):
+        """Obsługuje zmianę nazwy zawodów w tabeli historii"""
+        if item.column() == 1:  # Kolumna "Nazwa"
+            try:
+                comp_id = int(self.history_table.item(item.row(), 0).text())
+                new_name = item.text().strip()
+
+                if new_name:  # Sprawdź czy nazwa nie jest pusta
+                    from utils.history_store import update_competition_name
+
+                    if update_competition_name(comp_id, new_name):
+                        # Odtwórz dźwięk sukcesu
+                        self.play_sound()
+                    else:
+                        # Przywróć poprzednią nazwę
+                        QMessageBox.warning(
+                            self, "Błąd", "Nie udało się zaktualizować nazwy zawodów."
+                        )
+                        # Odśwież tabelę aby przywrócić poprzednią nazwę
+                        self._refresh_history_table()
+                else:
+                    # Przywróć poprzednią nazwę jeśli nowa jest pusta
+                    QMessageBox.warning(
+                        self, "Błąd", "Nazwa zawodów nie może być pusta."
+                    )
+                    self._refresh_history_table()
+            except Exception as e:
+                QMessageBox.critical(
+                    self, "Błąd", f"Wystąpił błąd podczas aktualizacji nazwy: {str(e)}"
+                )
+                self._refresh_history_table()
 
     def _open_history_detail(self, item: QTableWidgetItem):  # noqa: N802 - Qt slot
         row = item.row()
@@ -2510,19 +2737,28 @@ class MainWindow(QMainWindow):
                         "p2": 0.0,
                         "judges1": None,
                         "judges2": None,
+                        "timing1": None,
+                        "timing2": None,
                     }
                 entry = results_map[key]
                 distance = float(j.get("distance") or 0.0)
                 total_points = float(j.get("total_points") or 0.0)
-                notes = j.get("notes_json")
+                notes = j.get("notes_json")  # To są dane judge (noty sędziowskie)
+                timing = j.get("timing_json")
+
                 if ri == 1:
                     entry["d1"] = distance
                     entry["p1"] = total_points
-                    entry["judges1"] = notes
+                    entry["judges1"] = notes  # Dane judge są już sparsowane z JSON
+                    entry["timing1"] = timing
+                    print(f"DEBUG: Przypisano judges1 dla {entry['name']}: {notes}")
+
                 elif ri == 2:
                     entry["d2"] = distance
                     entry["p2"] = total_points
-                    entry["judges2"] = notes
+                    entry["judges2"] = notes  # Dane judge są już sparsowane z JSON
+                    entry["timing2"] = timing
+                    print(f"DEBUG: Przypisano judges2 dla {entry['name']}: {notes}")
 
         results = list(results_map.values())
         # Sort like competition: by p1 in round 1; by p1+p2 in round 2 or final
@@ -2563,11 +2799,15 @@ class MainWindow(QMainWindow):
             f = name_item.font()
             f.setBold(True)
             name_item.setFont(f)
+            # Wyłącz edycję dla nazwy zawodnika
+            name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
             table.setItem(i, 2, name_item)
 
             def _set_cell(col, text):
                 it = QTableWidgetItem(text)
                 it.setTextAlignment(Qt.AlignCenter)
+                # Wyłącz edycję dla wszystkich kolumn z punktami i odległościami
+                it.setFlags(it.flags() & ~Qt.ItemIsEditable)
                 table.setItem(i, col, it)
 
             if is_qualification:
@@ -2593,19 +2833,47 @@ class MainWindow(QMainWindow):
 
         # Store context for click handling
         self.history_detail_table = table
+        table.setObjectName("history_detail_table")  # Set object name for navigation
         self._history_detail_is_qualification = is_qualification
         self._history_detail_results = results
         self._history_detail_hill_name = data["competition"].get("hill_name", "")
         self._history_detail_gate = getattr(self, "competition_gate", None)
+        # Zapisz ID konkursu w kontekście
+        self._current_history_competition_id = data["competition"].get("id")
+        print(f"DEBUG: Łączę itemClicked z _on_history_detail_cell_clicked")
+        print(f"DEBUG: Liczba wyników: {len(results)}")
+        print(f"DEBUG: Czy to kwalifikacje: {is_qualification}")
+        print(f"DEBUG: ID konkursu: {self._current_history_competition_id}")
+
+        # Usuń wszystkie istniejące połączenia
+        try:
+            self.history_detail_table.itemClicked.disconnect()
+        except:
+            pass
+
         self.history_detail_table.itemClicked.connect(
             self._on_history_detail_cell_clicked
         )
 
+        # Dodaj prosty test - sprawdź czy itemClicked działa
+        def test_click(item):
+            print(f"DEBUG: TEST CLICK - row: {item.row()}, col: {item.column()}")
+            # Sprawdź czy dane są dostępne
+            if item.row() < len(results):
+                res = results[item.row()]
+                print(f"DEBUG: Dane dla wiersza {item.row()}: {res}")
+
+        self.history_detail_table.itemClicked.connect(test_click)
+
         # Navigate to this detail page
         self.central_widget.addWidget(widget)
+        self._history_detail_widget_index = self.central_widget.count() - 1
         self.central_widget.setCurrentWidget(widget)
 
     def _on_history_detail_cell_clicked(self, item: QTableWidgetItem):
+        print(
+            f"DEBUG: _on_history_detail_cell_clicked wywołane! row: {item.row()}, col: {item.column()}"
+        )
         try:
             row = item.row()
             col = item.column()
@@ -2613,6 +2881,7 @@ class MainWindow(QMainWindow):
             if row < 0 or row >= len(results):
                 return
             res = results[row]
+            print(f"DEBUG: res: {res}")
             # Resolve hill by name
             hill_name = getattr(self, "_history_detail_hill_name", "")
             hill = next(
@@ -2644,12 +2913,65 @@ class MainWindow(QMainWindow):
                     jumper = jumper or Jumper(
                         res["name"], res["last"], nationality=res.get("country")
                     )
-                    self._show_jump_replay(jumper, hill, gate, res.get("d1", 0.0), "Q")
+                    self._show_jump_replay(
+                        jumper,
+                        hill,
+                        gate,
+                        res.get("d1", 0.0),
+                        "Q",
+                        timing_info=res.get("timing1"),
+                        from_history=True,
+                    )
                 elif col == 4 and res.get("p1", 0) > 0:
                     # points breakdown
                     distance = res.get("d1", 0.0)
                     points = res.get("p1", 0.0)
                     judge = res.get("judges1")
+
+                    print(
+                        f"DEBUG: KLIKNIĘTO NA PUNKTY! distance: {distance}, points: {points}, judge: {judge}"
+                    )
+                    print(f"DEBUG: res keys: {list(res.keys())}")
+                    print(f"DEBUG: res['judges1']: {res.get('judges1')}")
+                    print(f"DEBUG: Type of judge: {type(judge)}")
+                    if judge:
+                        print(
+                            f"DEBUG: Judge keys: {list(judge.keys()) if isinstance(judge, dict) else 'Not a dict'}"
+                        )
+
+                    # Sprawdź czy dane judge są dostępne
+                    if judge is None:
+                        print(
+                            f"DEBUG: Brak danych judge dla {res['name']} {res['last']}"
+                        )
+                        # Spróbuj pobrać dane judge bezpośrednio z bazy
+                        try:
+                            from utils.history_store import get_competition_detail
+
+                            # Znajdź ID konkursu z kontekstu
+                            comp_id = getattr(
+                                self, "_current_history_competition_id", None
+                            )
+                            if comp_id:
+                                data = get_competition_detail(comp_id)
+                                for r in data.get("rounds", []):
+                                    for j in r.get("jumps", []):
+                                        if (
+                                            j.get("name") == res["name"]
+                                            and j.get("last_name") == res["last"]
+                                        ):
+                                            judge = j.get("notes_json")
+                                            print(
+                                                f"DEBUG: Pobrano dane judge z bazy: {judge}"
+                                            )
+                                            break
+
+                                    # Jeśli znaleziono dane judge, przerwij pętlę po rundach
+                                    if judge is not None:
+                                        break
+                        except Exception as e:
+                            print(f"DEBUG: Błąd pobierania danych judge: {e}")
+
                     jumper = next(
                         (
                             j
@@ -2661,7 +2983,9 @@ class MainWindow(QMainWindow):
                     jumper = jumper or Jumper(
                         res["name"], res["last"], nationality=res.get("country")
                     )
-                    self._show_points_breakdown(jumper, distance, points, "Q", judge)
+                    self._show_points_breakdown(
+                        jumper, distance, points, "Q", judge, from_history=True
+                    )
                 return
 
             # Competition: series 1 (cols 3,4), series 2 (cols 5,6)
@@ -2678,7 +3002,15 @@ class MainWindow(QMainWindow):
                     res["name"], res["last"], nationality=res.get("country")
                 )
                 if col == 3 and res.get("d1", 0) > 0:
-                    self._show_jump_replay(jumper, hill, gate, res.get("d1", 0.0), 1)
+                    self._show_jump_replay(
+                        jumper,
+                        hill,
+                        gate,
+                        res.get("d1", 0.0),
+                        1,
+                        timing_info=res.get("timing1"),
+                        from_history=True,
+                    )
                 elif col == 4 and res.get("p1", 0) > 0:
                     self._show_points_breakdown(
                         jumper,
@@ -2686,6 +3018,7 @@ class MainWindow(QMainWindow):
                         res.get("p1", 0.0),
                         1,
                         res.get("judges1"),
+                        from_history=True,
                     )
             elif col in (5, 6) and (res.get("d2", 0) > 0 or res.get("p2", 0) > 0):
                 jumper = next(
@@ -2700,7 +3033,15 @@ class MainWindow(QMainWindow):
                     res["name"], res["last"], nationality=res.get("country")
                 )
                 if col == 5 and res.get("d2", 0) > 0:
-                    self._show_jump_replay(jumper, hill, gate, res.get("d2", 0.0), 2)
+                    self._show_jump_replay(
+                        jumper,
+                        hill,
+                        gate,
+                        res.get("d2", 0.0),
+                        2,
+                        timing_info=res.get("timing2"),
+                        from_history=True,
+                    )
                 elif col == 6 and res.get("p2", 0) > 0:
                     self._show_points_breakdown(
                         jumper,
@@ -2708,8 +3049,74 @@ class MainWindow(QMainWindow):
                         res.get("p2", 0.0),
                         2,
                         res.get("judges2"),
+                        from_history=True,
                     )
-        except Exception:
+            # Kolumna z sumą punktów to 7
+            elif col == 7:
+                print(
+                    f"DEBUG: Kliknięto na sumę punktów w historii dla {res['name']} {res['last']}"
+                )
+                print(f"DEBUG: res keys: {list(res.keys())}")
+                print(
+                    f"DEBUG: d1: {res.get('d1')}, d2: {res.get('d2')}, p1: {res.get('p1')}, p2: {res.get('p2')}"
+                )
+
+                # Sprawdź czy są dane z obu serii - zmieniony warunek na bardziej elastyczny
+                d1 = res.get("d1", 0)
+                d2 = res.get("d2", 0)
+                p1 = res.get("p1", 0)
+                p2 = res.get("p2", 0)
+
+                print(f"DEBUG: Sprawdzam dane - d1: {d1}, d2: {d2}, p1: {p1}, p2: {p2}")
+
+                # Sprawdź czy są jakiekolwiek dane z serii (odległość lub punkty)
+                if not ((d1 > 0 or p1 > 0) or (d2 > 0 or p2 > 0)):
+                    print("DEBUG: Brak danych z serii w historii")
+                    return
+
+                # Oblicz sumę punktów
+                total_points = (
+                    (res.get("p1", 0) + res.get("p2", 0))
+                    if (res.get("p1", 0) or res.get("p2", 0))
+                    else 0.0
+                )
+
+                if total_points > 0:
+                    print(
+                        f"DEBUG: Wywołuję _show_total_points_breakdown z historii, total_points: {total_points}"
+                    )
+                    # Znajdź skocznię po nazwie z historii
+                    hill_name = getattr(self, "_history_detail_hill_name", "")
+                    hill = next(
+                        (h for h in self.all_hills if h.name == hill_name), None
+                    )
+                    if hill:
+                        # Znajdź lub utwórz obiekt jumper
+                        jumper = next(
+                            (
+                                j
+                                for j in self.all_jumpers
+                                if j.name == res["name"] and j.last_name == res["last"]
+                            ),
+                            None,
+                        )
+                        jumper = jumper or Jumper(
+                            res["name"], res["last"], nationality=res.get("country")
+                        )
+
+                        print(f"DEBUG: Znaleziono/utworzono jumper: {jumper}")
+
+                        self._show_total_points_breakdown(
+                            jumper,
+                            res,
+                            total_points,
+                        )
+                    else:
+                        print(f"DEBUG: Nie znaleziono skoczni: {hill_name}")
+                else:
+                    print("DEBUG: Suma punktów wynosi 0")
+        except Exception as e:
+            print(f"DEBUG: Błąd w _on_history_detail_cell_clicked: {e}")
             pass
 
     def _create_support_page(self):
@@ -3049,10 +3456,24 @@ class MainWindow(QMainWindow):
     def _on_result_cell_clicked(self, row, column):
         self.play_sound()
 
+        # Sprawdź czy competition_results istnieje i ma dane
+        if not hasattr(self, "competition_results") or not self.competition_results:
+            print("DEBUG: Brak danych competition_results")
+            return
+
         if row >= len(self.competition_results):
+            print(
+                f"DEBUG: Row {row} poza zakresem competition_results ({len(self.competition_results)})"
+            )
             return
 
         result_data = self.competition_results[row]
+
+        # Sprawdź czy result_data ma wymagane pola
+        if not isinstance(result_data, dict) or "jumper" not in result_data:
+            print(f"DEBUG: Nieprawidłowe dane result_data: {result_data}")
+            return
+
         jumper = result_data["jumper"]
 
         # Klik na kolumnę 2 (Zawodnik) – obecnie bez akcji
@@ -3119,12 +3540,33 @@ class MainWindow(QMainWindow):
 
             try:
                 total_points = float(total_points_str)
+                print(
+                    f"DEBUG: Wywołuję _show_total_points_breakdown dla {jumper}, total_points: {total_points}"
+                )
+                print(
+                    f"DEBUG: result_data keys: {list(result_data.keys()) if isinstance(result_data, dict) else 'Not a dict'}"
+                )
+
+                # Sprawdź czy result_data ma wymagane pola dla _show_total_points_breakdown
+                if not isinstance(result_data, dict):
+                    print("DEBUG: result_data nie jest słownikiem")
+                    return
+
+                # Sprawdź czy są dane z obu serii
+                if not (result_data.get("d1", 0) > 0 or result_data.get("d2", 0) > 0):
+                    print("DEBUG: Brak danych z serii w result_data")
+                    return
+
                 self._show_total_points_breakdown(
                     jumper,
                     result_data,
                     total_points,
                 )
-            except (ValueError, TypeError):
+            except (ValueError, TypeError) as e:
+                print(f"DEBUG: Błąd konwersji total_points: {e}")
+                return
+            except Exception as e:
+                print(f"DEBUG: Nieoczekiwany błąd w _show_total_points_breakdown: {e}")
                 return
 
     def _show_jumper_card(self, jumper: "Jumper"):
@@ -3316,7 +3758,14 @@ class MainWindow(QMainWindow):
             )
 
     def _show_jump_replay(
-        self, jumper, hill, gate, distance, seria_num, timing_info=None
+        self,
+        jumper,
+        hill,
+        gate,
+        distance,
+        seria_num,
+        timing_info=None,
+        from_history=False,
     ):
         # Użyj przekazanego timingu (konkretnej serii), a jeśli nie ma – ostatniego dostępnego
         ti = timing_info or getattr(jumper, "last_timing_info", None)
@@ -3332,6 +3781,9 @@ class MainWindow(QMainWindow):
             f"Max prędkość: {sim_data['max_velocity_kmh']:.1f} km/h"
         )
         self.replay_stats_label.setText(stats_text)
+
+        # Store the back navigation context
+        self._jump_replay_from_history = from_history
 
         self.central_widget.setCurrentIndex(self.JUMP_REPLAY_IDX)
         self._run_animation_on_canvas(
@@ -3472,50 +3924,87 @@ class MainWindow(QMainWindow):
         scores_layout = QHBoxLayout()
         scores_layout.setSpacing(6)
 
-        all_scores = judge_data["all_scores"]
+        all_scores = judge_data.get("all_scores", [])
+
+        # Sprawdź czy all_scores jest listą i ma elementy
+        if not isinstance(all_scores, list) or len(all_scores) == 0:
+            # Jeśli brak danych, utwórz prostą kartę
+            self._create_simple_judge_card(judge_data)
+            return
 
         # Zawsze pokazuj 3 środkowe noty na zielono, 2 skrajne na czerwono.
         # Niezależnie od duplikatów, zawsze dokładnie 2 noty są czerwone (najniższa i najwyższa).
 
         # Tworzymy listę krotek (wynik, oryginalny_indeks)
-        indexed_scores = [(score, i) for i, score in enumerate(all_scores)]
+        indexed_scores = []
+        for i, score in enumerate(all_scores):
+            try:
+                score_value = float(score)
+                indexed_scores.append((score_value, i))
+            except (ValueError, TypeError):
+                continue
+
+        # Sprawdź czy mamy jakieś poprawne noty
+        if len(indexed_scores) == 0:
+            # Jeśli brak poprawnych not, utwórz prostą kartę
+            self._create_simple_judge_card(judge_data)
+            return
 
         # Sortujemy po wyniku, aby znaleźć najniższy i najwyższy element
         sorted_indexed_scores = sorted(indexed_scores, key=lambda x: x[0])
 
         # Zbieramy oryginalne indeksy, które mają być czerwone (pierwszy i ostatni z posortowanej listy)
-        red_indices = {sorted_indexed_scores[0][1], sorted_indexed_scores[-1][1]}
+        if len(sorted_indexed_scores) == 1:
+            # Jeśli mamy tylko jedną notę, nie ma skrajnych
+            red_indices = set()
+        else:
+            red_indices = {sorted_indexed_scores[0][1], sorted_indexed_scores[-1][1]}
 
         for i, score in enumerate(all_scores):
-            score_widget = QWidget()
-            score_layout = QVBoxLayout(score_widget)
-            score_layout.setSpacing(2)
+            try:
+                score_widget = QWidget()
+                score_layout = QVBoxLayout(score_widget)
+                score_layout.setSpacing(2)
 
-            # Nazwa sędziego
-            judge_name = QLabel(f"Sędzia {i + 1}")
-            judge_name.setAlignment(Qt.AlignCenter)
-            score_layout.addWidget(judge_name)
+                # Nazwa sędziego
+                judge_name = QLabel(f"Sędzia {i + 1}")
+                judge_name.setAlignment(Qt.AlignCenter)
+                score_layout.addWidget(judge_name)
 
-            # Nota
-            score_label = QLabel(f"{score:.1f}")
-            score_label.setAlignment(Qt.AlignCenter)
-            score_label.setMinimumSize(35, 25)
+                # Nota - sprawdź czy score jest liczbą
+                try:
+                    score_value = float(score)
+                    score_text = f"{score_value:.1f}"
+                except (ValueError, TypeError):
+                    score_text = "0.0"
+                    score_value = 0.0
 
-            # Kolorowanie not - zawsze 2 skrajne na czerwono, 3 środkowe na zielono
-            if i in red_indices:
-                score_label.setProperty("chip", True)
-                score_label.setProperty("variant", "danger")
-            else:
-                score_label.setProperty("chip", True)
-                score_label.setProperty("variant", "success")
+                score_label = QLabel(score_text)
+                score_label.setAlignment(Qt.AlignCenter)
+                score_label.setMinimumSize(35, 25)
 
-            score_layout.addWidget(score_label)
-            scores_layout.addWidget(score_widget)
+                # Kolorowanie not - zawsze 2 skrajne na czerwono, 3 środkowe na zielono
+                if i in red_indices:
+                    score_label.setProperty("chip", True)
+                    score_label.setProperty("variant", "danger")
+                else:
+                    score_label.setProperty("chip", True)
+                    score_label.setProperty("variant", "success")
+
+                score_layout.addWidget(score_label)
+                scores_layout.addWidget(score_widget)
+            except Exception as e:
+                print(f"DEBUG: Błąd tworzenia noty sędziego {i}: {e}")
+                continue
 
         layout.addLayout(scores_layout)
 
         # Suma not
-        total_judge_points = judge_data["total_score"]
+        total_judge_points = judge_data.get("total_score", 0.0)
+        try:
+            total_judge_points = float(total_judge_points)
+        except (ValueError, TypeError):
+            total_judge_points = 0.0
         judge_summary = QLabel(f"Suma (bez skrajnych): {total_judge_points:.1f} pkt")
         judge_summary.setProperty("chip", True)
         judge_summary.setProperty("variant", "primary")
@@ -3527,21 +4016,85 @@ class MainWindow(QMainWindow):
         landing_label.setAlignment(Qt.AlignCenter)
         landing_label.setProperty("chip", True)
         event = judge_data.get("event")
-        if event == "fall":
-            landing_label.setText("Lądowanie: Upadek ❌")
-            landing_label.setProperty("variant", "danger")
-        elif event == "hand":
-            landing_label.setText("Lądowanie: Podpórka ❗")
-            landing_label.setProperty("variant", "warning")
-        else:
-            # SAFE – rozróżnij telemark vs zwykłe
-            if judge_data.get("telemark_landing", False):
-                landing_label.setText("Lądowanie: Telemark ✅")
-                landing_label.setProperty("variant", "success")
+        telemark_landing = judge_data.get("telemark_landing", False)
+
+        try:
+            if event == "fall":
+                landing_label.setText("Lądowanie: Upadek ❌")
+                landing_label.setProperty("variant", "danger")
+            elif event == "hand":
+                landing_label.setText("Lądowanie: Podpórka ❗")
+                landing_label.setProperty("variant", "warning")
             else:
-                landing_label.setText("Lądowanie: Zwykłe")
-                landing_label.setProperty("variant", "primary")
+                # SAFE – rozróżnij telemark vs zwykłe
+                if telemark_landing:
+                    landing_label.setText("Lądowanie: Telemark ✅")
+                    landing_label.setProperty("variant", "success")
+                else:
+                    landing_label.setText("Lądowanie: Zwykłe")
+                    landing_label.setProperty("variant", "primary")
+        except Exception as e:
+            print(f"DEBUG: Błąd tworzenia etykiety lądowania: {e}")
+            landing_label.setText("Lądowanie: Brak danych")
+            landing_label.setProperty("variant", "primary")
+
         layout.addWidget(landing_label)
+
+        self.points_breakdown_layout.addWidget(card)
+
+    def _create_simple_judge_card(self, judge_data):
+        """Tworzy prostą kartę z notami sędziowskimi dla danych z historii."""
+        card = QWidget()
+        card.setProperty("class", "card")
+
+        layout = QVBoxLayout(card)
+        layout.setSpacing(4)
+
+        # Tytuł karty
+        title = QLabel("Punkty za noty")
+        title.setProperty("chip", True)
+        title.setProperty("variant", "primary")
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title)
+
+        # Wyświetl dostępne dane judge
+        info_label = QLabel("Dane not sędziowskich dostępne")
+        info_label.setAlignment(Qt.AlignCenter)
+        info_label.setProperty("chip", True)
+        info_label.setProperty("variant", "info")
+        layout.addWidget(info_label)
+
+        # Jeśli są jakieś dane, wyświetl je
+        if judge_data:
+            data_text = f"Dane: {str(judge_data)[:100]}..."
+            data_label = QLabel(data_text)
+            data_label.setAlignment(Qt.AlignCenter)
+            data_label.setProperty("role", "meta")
+            layout.addWidget(data_label)
+
+        self.points_breakdown_layout.addWidget(card)
+
+    def _create_no_judge_card(self):
+        """Tworzy kartę informującą o braku danych not sędziowskich."""
+        card = QWidget()
+        card.setProperty("class", "card")
+
+        layout = QVBoxLayout(card)
+        layout.setSpacing(4)
+
+        # Tytuł karty
+        title = QLabel("Punkty za noty")
+        title.setProperty("chip", True)
+        title.setProperty("variant", "primary")
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title)
+
+        # Informacja o braku danych
+        info_label = QLabel("Brak danych not sędziowskich")
+        info_label.setAlignment(Qt.AlignCenter)
+        info_label.setProperty("chip", True)
+        info_label.setProperty("variant", "warning")
+        layout.addWidget(info_label)
 
         self.points_breakdown_layout.addWidget(card)
 
@@ -3560,10 +4113,12 @@ class MainWindow(QMainWindow):
         layout.addWidget(title)
 
         # Minimalistyczna suma punktów
-        if judge_data:
-            calc_text = (
-                f"{(distance_points + float(judge_data['total_score'])):.1f} pkt"
-            )
+        if judge_data and isinstance(judge_data, dict) and "total_score" in judge_data:
+            try:
+                judge_points = float(judge_data["total_score"])
+                calc_text = f"{(distance_points + judge_points):.1f} pkt"
+            except (ValueError, TypeError):
+                calc_text = f"{distance_points:.1f} pkt"
         else:
             calc_text = f"{distance_points:.1f} pkt"
 
@@ -3629,9 +4184,48 @@ class MainWindow(QMainWindow):
         self.points_breakdown_layout.addWidget(container)
 
     def _show_points_breakdown(
-        self, jumper, distance, points, seria_num, judge_data=None
+        self, jumper, distance, points, seria_num, judge_data=None, from_history=False
     ):
         """Wyświetla szczegółowy podział punktów za skok na pełnej stronie z animacją w tle."""
+        print(
+            f"DEBUG: _show_points_breakdown wywołane! jumper: {jumper}, distance: {distance}, points: {points}, seria_num: {seria_num}"
+        )
+        print(f"DEBUG: judge_data: {judge_data}")
+        print(f"DEBUG: judge_data type: {type(judge_data)}")
+        print(f"DEBUG: from_history: {from_history}")
+
+        if not hasattr(self, "competition_hill") or self.competition_hill is None:
+            print(
+                "DEBUG: Brak competition_hill! Próbuję znaleźć skocznie z contextu..."
+            )
+            hill_name = getattr(self, "_history_detail_hill_name", "")
+            if hill_name:
+                hill = next(
+                    (
+                        h
+                        for h in self.all_hills
+                        if getattr(h, "name", None) == hill_name
+                    ),
+                    None,
+                )
+                if hill:
+                    self.competition_hill = hill
+                    print(f"DEBUG: Znaleziono skocznie: {hill.name}")
+                else:
+                    print(f"DEBUG: Nie znaleziono skoczni o nazwie: {hill_name}")
+                    return
+            else:
+                print("DEBUG: Brak nazwy skoczni w kontekście!")
+                return
+
+        if not hasattr(self, "competition_gate") or self.competition_gate is None:
+            print("DEBUG: Brak competition_gate! Ustawiam domyślną belkę...")
+            self.competition_gate = (
+                getattr(self, "_history_detail_gate", None)
+                or self.competition_hill.gates
+            )
+            print(f"DEBUG: Ustawiono belkę: {self.competition_gate}")
+
         k_point = self.competition_hill.K
         meter_value = get_meter_value(k_point)
         difference = distance - k_point
@@ -3659,8 +4253,23 @@ class MainWindow(QMainWindow):
             distance, k_point, meter_value, difference, distance_points
         )
 
-        if judge_data:
-            self._create_judge_card(judge_data)
+        if judge_data and isinstance(judge_data, dict):
+            # Sprawdź czy dane judge mają wymaganą strukturę
+            if "all_scores" in judge_data and "total_score" in judge_data:
+                try:
+                    self._create_judge_card(judge_data)
+                except Exception as e:
+                    print(f"DEBUG: Błąd tworzenia karty judge: {e}")
+                    self._create_simple_judge_card(judge_data)
+            else:
+                # Jeśli dane judge mają inną strukturę, utwórz prostą kartę
+                self._create_simple_judge_card(judge_data)
+        elif judge_data:
+            # Jeśli judge_data nie jest dict, ale ma jakąś wartość
+            self._create_simple_judge_card({"raw_data": judge_data})
+        else:
+            # Jeśli brak danych judge, utwórz informację o braku danych
+            self._create_no_judge_card()
 
         self._create_total_card(distance_points, judge_data)
 
@@ -3673,6 +4282,9 @@ class MainWindow(QMainWindow):
         # Dodaj noty sędziowskie jeśli dostępne są dane
         # Usunięto referencje do starej grupy z notami sędziowskimi
 
+        # Store the back navigation context
+        self._points_breakdown_from_history = from_history
+
         # Uruchom animację trajektorii w tle
         sim_data = self._calculate_trajectory(
             jumper, self.competition_hill, self.competition_gate
@@ -3682,11 +4294,44 @@ class MainWindow(QMainWindow):
         )
 
         # Przełącz na stronę podziału punktów
+        print(
+            f"DEBUG: Przełączam na stronę podziału punktów (indeks: {self.POINTS_BREAKDOWN_IDX})"
+        )
         self.central_widget.setCurrentIndex(self.POINTS_BREAKDOWN_IDX)
+        print("DEBUG: Przełączenie zakończone")
 
     def _show_total_points_breakdown(self, jumper, result_data, total_points):
         """Wyświetla dwie spójne tabele z punktami za I i II serię: za odległość, noty, suma."""
-        k_point = self.competition_hill.K
+        print(
+            f"DEBUG: _show_total_points_breakdown wywołane! jumper: {jumper}, total_points: {total_points}"
+        )
+        print(f"DEBUG: result_data: {result_data}")
+
+        # Sprawdź czy competition_hill istnieje lub czy mamy dane z historii
+        hill = None
+        gate = None
+        k_point = None
+
+        if hasattr(self, "competition_hill") and self.competition_hill is not None:
+            hill = self.competition_hill
+            gate = getattr(self, "competition_gate", None)
+            k_point = hill.K
+        elif (
+            hasattr(self, "_history_detail_hill_name")
+            and self._history_detail_hill_name
+        ):
+            # Znajdź skocznię po nazwie z historii
+            hill_name = self._history_detail_hill_name
+            hill = next((h for h in self.all_hills if h.name == hill_name), None)
+            if hill:
+                gate = getattr(self, "_history_detail_gate", None) or hill.gates
+                k_point = hill.K
+
+        if hill is None or k_point is None:
+            print("DEBUG: Brak danych o skoczni w _show_total_points_breakdown")
+            return
+
+        print(f"DEBUG: Znaleziono skocznię: {hill}, k_point: {k_point}")
         meter_value = get_meter_value(k_point)
 
         # Aktualizuj tytuł i informacje
@@ -3706,41 +4351,53 @@ class MainWindow(QMainWindow):
 
         # I seria – prosty, logiczny widok z trzema wartościami
         if result_data.get("d1", 0) > 0 and result_data.get("p1", 0) > 0:
-            d1 = float(result_data["d1"])
-            p1 = float(result_data["p1"])  # suma serii (odległość + noty)
-            distance_points_1 = calculate_jump_points(d1, k_point)
-            judges1 = result_data.get("judges1")
-            judge_points_1 = (
-                float(judges1["total_score"])
-                if judges1
-                else max(0.0, p1 - distance_points_1)
-            )
-            self._create_series_points_table(
-                "I seria", distance_points_1, judge_points_1, p1
-            )
+            try:
+                d1 = float(result_data["d1"])
+                p1 = float(result_data["p1"])  # suma serii (odległość + noty)
+                distance_points_1 = calculate_jump_points(d1, k_point)
+                judges1 = result_data.get("judges1")
+                if judges1 and isinstance(judges1, dict) and "total_score" in judges1:
+                    try:
+                        judge_points_1 = float(judges1["total_score"])
+                    except (ValueError, TypeError):
+                        judge_points_1 = max(0.0, p1 - distance_points_1)
+                else:
+                    judge_points_1 = max(0.0, p1 - distance_points_1)
+                self._create_series_points_table(
+                    "I seria", distance_points_1, judge_points_1, p1
+                )
+            except Exception as e:
+                print(f"DEBUG: Błąd przetwarzania I serii: {e}")
+                return
 
         # II seria – analogicznie
         if result_data.get("d2", 0) > 0 and result_data.get("p2", 0) > 0:
-            d2 = float(result_data["d2"])
-            p2 = float(result_data["p2"])  # suma serii
-            distance_points_2 = calculate_jump_points(d2, k_point)
-            judges2 = result_data.get("judges2")
-            judge_points_2 = (
-                float(judges2["total_score"])
-                if judges2
-                else max(0.0, p2 - distance_points_2)
-            )
-            self._create_series_points_table(
-                "II seria", distance_points_2, judge_points_2, p2
-            )
+            try:
+                d2 = float(result_data["d2"])
+                p2 = float(result_data["p2"])  # suma serii
+                distance_points_2 = calculate_jump_points(d2, k_point)
+                judges2 = result_data.get("judges2")
+                if judges2 and isinstance(judges2, dict) and "total_score" in judges2:
+                    try:
+                        judge_points_2 = float(judges2["total_score"])
+                    except (ValueError, TypeError):
+                        judge_points_2 = max(0.0, p2 - distance_points_2)
+                else:
+                    judge_points_2 = max(0.0, p2 - distance_points_2)
+                self._create_series_points_table(
+                    "II seria", distance_points_2, judge_points_2, p2
+                )
+            except Exception as e:
+                print(f"DEBUG: Błąd przetwarzania II serii: {e}")
+                return
 
         # Zwięzła karta sumy punktów pozostaje bez zmian, ale mogę ją też
         # zamienić na trzecią mini-tabelę "Razem" jeśli zechcesz.
         self._create_total_card(total_points, None)
 
         # Aktualizuj informacje o skoczni
-        self.points_hill_name.setText(f"Skocznia: {self.competition_hill}")
-        self.points_gate_info.setText(f"Belka startowa: {self.competition_gate}")
+        self.points_hill_name.setText(f"Skocznia: {hill}")
+        self.points_gate_info.setText(f"Belka startowa: {gate}")
 
         # Usunięto referencje do starej formuły obliczeniowej
 
@@ -3748,12 +4405,13 @@ class MainWindow(QMainWindow):
 
         # Uruchom animację trajektorii w tle (użyj pierwszej serii jeśli dostępna)
         if result_data.get("d1", 0) > 0:
-            sim_data = self._calculate_trajectory(
-                jumper, self.competition_hill, self.competition_gate
-            )
+            sim_data = self._calculate_trajectory(jumper, hill, gate)
             self._run_animation_on_canvas(
-                self.points_canvas, self.points_figure, sim_data, self.competition_hill
+                self.points_canvas, self.points_figure, sim_data, hill
             )
+
+        # Store the back navigation context - we're coming from history
+        self._points_breakdown_from_history = True
 
         # Przełącz na stronę podziału punktów
         self.central_widget.setCurrentIndex(self.POINTS_BREAKDOWN_IDX)
@@ -4605,6 +5263,10 @@ class MainWindow(QMainWindow):
             jumper, distance, self.competition_hill.L, self.competition_hill
         )
 
+        # Sprawdź czy judge_scores nie jest None
+        if judge_scores is None:
+            judge_scores = {"total_score": 0.0, "all_scores": [0.0] * 5}
+
         # Oblicz całkowite punkty (odległość + noty sędziowskie)
         total_points = distance_points + judge_scores["total_score"]
 
@@ -5144,6 +5806,38 @@ class MainWindow(QMainWindow):
 
         layout.addLayout(details_layout)
         self.points_breakdown_layout.addWidget(card)
+
+    def _jump_replay_back_navigation(self):
+        """Handle back navigation from jump replay page based on context."""
+        if (
+            hasattr(self, "_jump_replay_from_history")
+            and self._jump_replay_from_history
+        ):
+            # If we came from history, go back to the history results page
+            if hasattr(self, "_history_detail_widget_index"):
+                self.central_widget.setCurrentIndex(self._history_detail_widget_index)
+            else:
+                # Fallback: go back to history main page
+                self.central_widget.setCurrentIndex(self.HISTORY_IDX)
+        else:
+            # If we came from competition, go back to competition page
+            self.central_widget.setCurrentIndex(self.COMPETITION_IDX)
+
+    def _points_breakdown_back_navigation(self):
+        """Handle back navigation from points breakdown page based on context."""
+        if (
+            hasattr(self, "_points_breakdown_from_history")
+            and self._points_breakdown_from_history
+        ):
+            # If we came from history, go back to the history results page
+            if hasattr(self, "_history_detail_widget_index"):
+                self.central_widget.setCurrentIndex(self._history_detail_widget_index)
+            else:
+                # Fallback: go back to history main page
+                self.central_widget.setCurrentIndex(self.HISTORY_IDX)
+        else:
+            # If we came from competition, go back to competition page
+            self.central_widget.setCurrentIndex(self.COMPETITION_IDX)
 
 
 class Judge:

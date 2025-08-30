@@ -251,6 +251,19 @@ def add_jump(
             except Exception:
                 style_sum = None
 
+        # Sprawdź czy judge_data nie jest None przed zapisem
+        judge_json = None
+        if (
+            judge_data is not None
+            and isinstance(judge_data, dict)
+            and len(judge_data) > 0
+        ):
+            try:
+                judge_json = json.dumps(judge_data)
+
+            except Exception:
+                judge_json = None
+
         cur.execute(
             """
             INSERT INTO jumps(
@@ -266,7 +279,7 @@ def add_jump(
                 wind_points,
                 gate_points,
                 float(total_points),
-                json.dumps(judge_data) if judge_data is not None else None,
+                judge_json,
                 json.dumps(timing_info) if timing_info is not None else None,
                 datetime.utcnow().isoformat(timespec="seconds"),
             ),
@@ -343,6 +356,7 @@ def get_competition_detail(competition_id: int) -> Dict[str, Any]:
                 if d.get("notes_json"):
                     try:
                         d["notes_json"] = json.loads(d["notes_json"])  # type: ignore[assignment]
+
                     except Exception:
                         pass
                 if d.get("timing_json"):

@@ -2,6 +2,7 @@ import os
 import sqlite3
 import sys
 import json
+import csv
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -437,3 +438,87 @@ def delete_competition(competition_id: int) -> bool:
         return cur.rowcount > 0
     finally:
         conn.close()
+
+
+def export_competition_to_csv(competition_id: int, file_path: str) -> bool:
+    """Export competition results to CSV file"""
+    try:
+        competition_data = get_competition_detail(competition_id)
+        if not competition_data:
+            return False
+
+        competition = competition_data.get("competition", {})
+        rounds = competition_data.get("rounds", [])
+
+        with open(file_path, "w", newline="", encoding="utf-8") as csvfile:
+            writer = csv.writer(csvfile)
+
+            # Header with competition info
+            writer.writerow([f"Zawody: {competition.get('name', 'N/A')}"])
+            writer.writerow([f"Skocznia: {competition.get('hill_name', 'N/A')}"])
+            writer.writerow([f"K-Point: {competition.get('k_point', 'N/A')} m"])
+            writer.writerow([f"HS: {competition.get('hs_point', 'N/A')} m"])
+            writer.writerow([f"Data: {competition.get('created_at', 'N/A')}"])
+            writer.writerow([])  # Empty row
+
+            # Process each round
+            for round_data in rounds:
+                round_index = round_data.get("round_index", 1)
+                jumps = round_data.get("jumps", [])
+
+                if not jumps:
+                    continue
+
+                # Round header
+                if "qualification" in competition.get("mode", "").lower():
+                    writer.writerow(["Kwalifikacje"])
+                else:
+                    writer.writerow([f"Runda {round_index}"])
+
+                # Results header
+                writer.writerow(
+                    [
+                        "Miejsce",
+                        "Zawodnik",
+                        "Kraj",
+                        "Dystans",
+                        "Punkty za styl",
+                        "Punkty za wiatr",
+                        "Punkty za belkę",
+                        "Suma punktów",
+                    ]
+                )
+
+                # Sort jumps by total points (descending)
+                sorted_jumps = sorted(
+                    jumps, key=lambda x: x.get("total_points", 0), reverse=True
+                )
+
+                # Write jump results
+                for place, jump in enumerate(sorted_jumps, 1):
+                    name = f"{jump.get('name', '')} {jump.get('last_name', '')}".strip()
+                    country = jump.get("country_code", "")
+                    distance = jump.get("distance", 0)
+                    style_points = jump.get("style_sum", 0)
+                    wind_points = jump.get("wind_points", 0)
+                    gate_points = jump.get("gate_points", 0)
+                    total_points = jump.get("total_points", 0)
+
+                    writer.writerow(
+                        [
+                            place,
+                            name,
+                            country,
+                            f"{distance:.1f}m",
+                            f"{style_points:.1f}",
+                            f"{wind_points:.1f}",
+                            f"{gate_points:.1f}",
+                            f"{total_points:.1f}",
+                        ]
+                    )
+
+                writer.writerow([])  # Empty row between rounds
+
+        return True
+    except Exception:
+        return False

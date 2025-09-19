@@ -78,6 +78,7 @@ from utils.history_store import (
     register_participants as history_register_participants,
     add_jump as history_add_jump,
     finalize_competition as history_finalize_competition,
+    export_competition_to_csv,
 )
 
 
@@ -2418,7 +2419,7 @@ class MainWindow(QMainWindow):
         table.setColumnWidth(3, 60)  # K
         table.setColumnWidth(4, 160)  # Data - szersza dla pełnej daty z godziną
         table.setColumnWidth(5, 100)  # Typ
-        table.setColumnWidth(6, 160)  # Akcje - szersza dla przycisków z tekstem
+        table.setColumnWidth(6, 200)  # Akcje - szersza dla przycisków z tekstem
 
         # Ustaw wysokość wierszy
         table.verticalHeader().setDefaultSectionSize(
@@ -2559,8 +2560,44 @@ class MainWindow(QMainWindow):
                     ]
                 )
 
+                # Przycisk "Pobierz CSV" - nowoczesny, bez tła, większa ikonka
+                download_btn = QPushButton("↓")
+                download_btn.setProperty("variant", "ghost")
+                download_btn.setStyleSheet("""
+                    QPushButton {
+                        font-size: 18px;
+                        font-weight: 400;
+                        border-radius: 6px;
+                        padding: 8px 10px;
+                        min-height: 30px;
+                        max-height: 30px;
+                        min-width: 36px;
+                        border: none;
+                        background-color: transparent;
+                        color: #9ca3af;
+                    }
+                    QPushButton:hover {
+                        background-color: rgba(156, 163, 175, 0.1);
+                        color: #6b7280;
+                    }
+                    QPushButton:pressed {
+                        background-color: rgba(156, 163, 175, 0.2);
+                        color: #4b5563;
+                    }
+                """)
+                download_btn.setToolTip("Pobierz wyniki do pliku CSV")
+                download_btn.clicked.connect(
+                    lambda checked, row_idx=i: [
+                        self.play_sound(),
+                        self._export_competition_to_csv(row_idx),
+                    ]
+                )
+
                 actions_layout.addWidget(show_results_btn, 1)
                 actions_layout.addWidget(delete_btn, 1)
+                actions_layout.addWidget(
+                    download_btn, 0
+                )  # 0 = nie rozciągaj, trzymaj po prawej
 
                 self.history_table.setCellWidget(i, 6, actions_widget)
         except Exception:
@@ -2571,11 +2608,6 @@ class MainWindow(QMainWindow):
         comp_id_item = self.history_table.item(row_idx, 0)
         if not comp_id_item:
             return
-        try:
-            comp_id = int(comp_id_item.text())
-        except Exception:
-            return
-
         # Użyj istniejącej funkcji _open_history_detail
         self._open_history_detail(comp_id_item)
 
@@ -2613,6 +2645,60 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(
                     self, "Błąd", f"Wystąpił błąd podczas usuwania: {str(e)}"
+                )
+
+    def _export_competition_to_csv(self, row_idx: int):
+        """Eksportuje wyniki zawodów do pliku CSV"""
+        comp_id_item = self.history_table.item(row_idx, 0)
+        if not comp_id_item:
+            return
+        try:
+            comp_id = int(comp_id_item.text())
+        except Exception:
+            return
+
+        # Get competition name for default filename
+        comp_name_item = self.history_table.item(row_idx, 1)
+        comp_name = comp_name_item.text() if comp_name_item else "zawody"
+
+        # Clean filename
+        safe_name = "".join(
+            c for c in comp_name if c.isalnum() or c in (" ", "-", "_")
+        ).rstrip()
+        if not safe_name:
+            safe_name = "zawody"
+
+        # Suggest filename
+        from datetime import datetime
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        suggested_filename = f"{safe_name}_{timestamp}.csv"
+
+        # File dialog
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Zapisz wyniki zawodów do pliku CSV",
+            suggested_filename,
+            "Pliki CSV (*.csv);;Wszystkie pliki (*)",
+        )
+
+        if file_path:
+            try:
+                if export_competition_to_csv(comp_id, file_path):
+                    QMessageBox.information(
+                        self,
+                        "Sukces",
+                        f"Wyniki zostały zapisane do pliku:\n{file_path}",
+                    )
+                else:
+                    QMessageBox.warning(
+                        self,
+                        "Błąd",
+                        "Nie udało się wyeksportować wyników do pliku CSV.",
+                    )
+            except Exception as e:
+                QMessageBox.critical(
+                    self, "Błąd", f"Wystąpił błąd podczas eksportu:\n{str(e)}"
                 )
 
     def _on_history_item_changed(self, item: QTableWidgetItem):
@@ -2840,7 +2926,7 @@ class MainWindow(QMainWindow):
         self._history_detail_gate = getattr(self, "competition_gate", None)
         # Zapisz ID konkursu w kontekście
         self._current_history_competition_id = data["competition"].get("id")
-        print(f"DEBUG: Łączę itemClicked z _on_history_detail_cell_clicked")
+        print("DEBUG: Łączę itemClicked z _on_history_detail_cell_clicked")
         print(f"DEBUG: Liczba wyników: {len(results)}")
         print(f"DEBUG: Czy to kwalifikacje: {is_qualification}")
         print(f"DEBUG: ID konkursu: {self._current_history_competition_id}")
@@ -2848,7 +2934,7 @@ class MainWindow(QMainWindow):
         # Usuń wszystkie istniejące połączenia
         try:
             self.history_detail_table.itemClicked.disconnect()
-        except:
+        except Exception:
             pass
 
         self.history_detail_table.itemClicked.connect(
@@ -3110,6 +3196,7 @@ class MainWindow(QMainWindow):
                             jumper,
                             res,
                             total_points,
+                            from_history=True,
                         )
                     else:
                         print(f"DEBUG: Nie znaleziono skoczni: {hill_name}")
@@ -3561,6 +3648,7 @@ class MainWindow(QMainWindow):
                     jumper,
                     result_data,
                     total_points,
+                    from_history=False,
                 )
             except (ValueError, TypeError) as e:
                 print(f"DEBUG: Błąd konwersji total_points: {e}")
@@ -4300,7 +4388,9 @@ class MainWindow(QMainWindow):
         self.central_widget.setCurrentIndex(self.POINTS_BREAKDOWN_IDX)
         print("DEBUG: Przełączenie zakończone")
 
-    def _show_total_points_breakdown(self, jumper, result_data, total_points):
+    def _show_total_points_breakdown(
+        self, jumper, result_data, total_points, from_history=False
+    ):
         """Wyświetla dwie spójne tabele z punktami za I i II serię: za odległość, noty, suma."""
         print(
             f"DEBUG: _show_total_points_breakdown wywołane! jumper: {jumper}, total_points: {total_points}"
@@ -4410,8 +4500,8 @@ class MainWindow(QMainWindow):
                 self.points_canvas, self.points_figure, sim_data, hill
             )
 
-        # Store the back navigation context - we're coming from history
-        self._points_breakdown_from_history = True
+        # Store the back navigation context
+        self._points_breakdown_from_history = from_history
 
         # Przełącz na stronę podziału punktów
         self.central_widget.setCurrentIndex(self.POINTS_BREAKDOWN_IDX)
